@@ -38,3 +38,11 @@ CREATE TABLE students (
     registration_status VARCHAR(30) DEFAULT 'pending', 
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
+CREATE TABLE instructors (
+    user_id INT PRIMARY KEY,
+    instructor_license_number VARCHAR(100) UNIQUE NOT NULL,
+    years_experience INT,
+    specialization VARCHAR(255),
+    qualifications TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
