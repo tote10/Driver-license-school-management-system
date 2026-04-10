@@ -1,0 +1,12 @@
+# Ignore the database connection settings
+config/db.php
+
+# Ignore logs
+*.log
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore any future vendor folders (Composer)
+/vendor/

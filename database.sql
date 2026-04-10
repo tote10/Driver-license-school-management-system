@@ -46,3 +46,47 @@ CREATE TABLE instructors (
     qualifications TEXT,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
+CREATE TABLE training_programs(
+    program_id int AUTO_INCREMENT PRIMARY KEY,
+    name varchar(255) not null,
+    description text,
+    theory_duration_hours INT,
+    practical_duration_hours INT,
+    created_by INT,
+    fee_amount decimal(10,2) not null,
+    branch_id INT,
+    created_at datetime default CURRENT_TIMESTAMP,
+    updated_at datetime default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+    FOREIGN KEY(branch_id) REFERENCES branches(branch_id) ON DELETE SET NULL,
+    FOREIGN KEY(created_by) REFERENCES users(user_id) ON DELETE SET NULL
+
+);
+CREATE TABLE enrollments(
+    enrollment_id int AUTO_INCREMENT PRIMARY KEY,
+    student_user_id INT,
+    program_id INT,
+    enrollment_date datetime default CURRENT_TIMESTAMP,
+    approval_status VARCHAR(30) DEFAULT 'pending',
+    approved_by INT,
+    approval_date datetime,
+    current_progress_status VARCHAR(30) DEFAULT 'enrolled',
+    last_progress_update datetime,
+    created_at datetime default CURRENT_TIMESTAMP,
+    updated_at datetime default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+    FOREIGN KEY(student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
+    FOREIGN KEY(program_id) REFERENCES training_programs(program_id) ON DELETE CASCADE.
+    FOREIGN KEY(approved_by) REFERENCES users(user_id) ON DELETE SET NULL
+);
+CREATE TABLE instructor_assignments(
+    assignment_id int AUTO_INCREMENT PRIMARY KEY,
+    student_user_id INT,
+    instructor_user_id INT,
+    assigned_date datetime default CURRENT_TIMESTAMP,
+    assigned_by INT,
+    status VARCHAR(30) DEFAULT 'active',
+    created_at datetime default CURRENT_TIMESTAMP,
+    updated_at datetime default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+    FOREIGN KEY(student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
+    FOREIGN KEY(instructor_user_id) REFERENCES instructors(user_id) ON DELETE CASCADE,
+    FOREIGN KEY(assigned_by) REFERENCES users(user_id) ON DELETE SET NULL
+);
