@@ -26,12 +26,18 @@ if($_SERVER["REQUEST_METHOD"]=="POST"){
             $message="Your account is not active. Please contact the manager.";
         }
         else{
-            $_SESSION['user_id']=$user_data['user_id'];
-            $_SESSION['username']=$user_data['username'];
-            $_SESSION['role']=$user_data['role'];
-            $_SESSION['full_name']=$user_data['full_name'];
-            $success=true;
-            header("refresh:2;url=dashboard.php");
+            $_SESSION['user_id'] = $user_data['user_id'];
+            $_SESSION['username'] = $user_data['username'];
+            $_SESSION['role'] = $user_data['role'];
+            $_SESSION['full_name'] = $user_data['full_name'];
+
+            // Role-Based Redirection
+            if ($user_data['role'] === 'manager') {
+                header("Location: dashboard_manager.php");
+            } else {
+                header("Location: dashboard_student.php");
+            }
+            exit();
                 }
 
             }catch(PDOException $e){

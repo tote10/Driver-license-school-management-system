@@ -26,7 +26,8 @@ create table users(
     created_at datetime DEFAULT CURRENT_TIMESTAMP,
     last_login datetime,
     updated_at datetime default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
-    FOREIGN KEY(branch_id) REFERENCES branches(branch_id) ON DELETE SET NULL
+    FOREIGN KEY(branch_id) REFERENCES branches(branch_id) ON DELETE SET NULL,
+    INDEX idx_branch_id(branch_id)
 );
 CREATE TABLE students (
     user_id INT PRIMARY KEY,
@@ -40,53 +41,62 @@ CREATE TABLE students (
 );
 CREATE TABLE instructors (
     user_id INT PRIMARY KEY,
-    instructor_license_number VARCHAR(100) UNIQUE NOT NULL,
+    instructor_license_number VARCHAR(100) UNIQUE,
     years_experience INT,
     specialization VARCHAR(255),
     qualifications TEXT,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
-CREATE TABLE training_programs(
-    program_id int AUTO_INCREMENT PRIMARY KEY,
-    name varchar(255) not null,
-    description text,
+CREATE TABLE training_programs (
+    program_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
     theory_duration_hours INT,
     practical_duration_hours INT,
-    created_by INT,
-    fee_amount decimal(10,2) not null,
+    fee_amount DECIMAL(10, 2) NOT NULL,
     branch_id INT,
-    created_at datetime default CURRENT_TIMESTAMP,
-    updated_at datetime default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
-    FOREIGN KEY(branch_id) REFERENCES branches(branch_id) ON DELETE SET NULL,
-    FOREIGN KEY(created_by) REFERENCES users(user_id) ON DELETE SET NULL
-
+    created_by INT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (branch_id) REFERENCES branches(branch_id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE SET NULL,
+    INDEX idx_tp_branch_id (branch_id),
+    INDEX idx_tp_created_by (created_by)
 );
-CREATE TABLE enrollments(
-    enrollment_id int AUTO_INCREMENT PRIMARY KEY,
+
+CREATE TABLE enrollments (
+    enrollment_id INT AUTO_INCREMENT PRIMARY KEY,
     student_user_id INT,
     program_id INT,
-    enrollment_date datetime default CURRENT_TIMESTAMP,
+    enrollment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     approval_status VARCHAR(30) DEFAULT 'pending',
     approved_by INT,
-    approval_date datetime,
+    approved_date DATETIME,
     current_progress_status VARCHAR(30) DEFAULT 'enrolled',
-    last_progress_update datetime,
-    created_at datetime default CURRENT_TIMESTAMP,
-    updated_at datetime default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
-    FOREIGN KEY(student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
-    FOREIGN KEY(program_id) REFERENCES training_programs(program_id) ON DELETE CASCADE.
-    FOREIGN KEY(approved_by) REFERENCES users(user_id) ON DELETE SET NULL
+    last_progress_update DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (program_id) REFERENCES training_programs(program_id) ON DELETE CASCADE,
+    FOREIGN KEY (approved_by) REFERENCES users(user_id) ON DELETE SET NULL,
+    INDEX idx_enr_student_id (student_user_id),
+    INDEX idx_enr_program_id (program_id),
+    INDEX idx_enr_approved_by (approved_by)
 );
-CREATE TABLE instructor_assignments(
-    assignment_id int AUTO_INCREMENT PRIMARY KEY,
+
+CREATE TABLE instructor_assignments (
+    assignment_id INT AUTO_INCREMENT PRIMARY KEY,
     student_user_id INT,
     instructor_user_id INT,
-    assigned_date datetime default CURRENT_TIMESTAMP,
+    assigned_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     assigned_by INT,
     status VARCHAR(30) DEFAULT 'active',
-    created_at datetime default CURRENT_TIMESTAMP,
-    updated_at datetime default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
-    FOREIGN KEY(student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
-    FOREIGN KEY(instructor_user_id) REFERENCES instructors(user_id) ON DELETE CASCADE,
-    FOREIGN KEY(assigned_by) REFERENCES users(user_id) ON DELETE SET NULL
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (instructor_user_id) REFERENCES instructors(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (assigned_by) REFERENCES users(user_id) ON DELETE SET NULL,
+    INDEX idx_asgn_student_id (student_user_id),
+    INDEX idx_asgn_instructor_id (instructor_user_id),
+    INDEX idx_asgn_assigned_by (assigned_by)
 );
