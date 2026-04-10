@@ -1,9 +1,14 @@
 <?php
 require_once 'config/db.php';
-$branch_stmt = $pdo->query("SELECT branch_id,name FROM branches");
-$allBranches= $branch_stmt->fetchAll();
 $message='';
 $success = false;
+try{
+    $branch_stmt = $pdo->query("SELECT branch_id, name FROM branches ORDER BY name");
+    $allBranches = $branch_stmt->fetchAll();
+}catch(PDOException $e){
+    $message="Error fetching branches: " . $e->getMessage();
+}
+
 if ($_SERVER["REQUEST_METHOD"] == "POST"){
     
 $username=trim($_POST['username'] ?? '');
@@ -29,7 +34,7 @@ else{
 
     $check_stmt->execute([$username,$email]);
     if($check_stmt->rowCount()>0){
-        $message= "error: that Username or Email is Already taken!";
+        $message= "error: the Username($username) or Email($email) is Already taken!";
     }
     else{
        try{
