@@ -16,7 +16,7 @@ $address=trim($_POST['address'] ?? '');
 $license_category=trim($_POST['license_category'] ?? '');
 $full_name=trim($_POST['full_name'] ?? '');
 $phone=trim($_POST['phone'] ?? '');
-$branch_id=$_POST['branch_id']
+$branch_id=$_POST['branch_id'] ?? '';
 if(empty($username) || empty($email) || empty($full_name) || empty($password) || empty($phone)){
     $message="Please fill in all fields";
 }
@@ -25,7 +25,14 @@ elseif($password !== $confirmPassword){
 }
 
 else{
-try{
+    $check_stmt= $pdo->prepare("SELECT user_id FROM users WHERE username = ? OR email = ?");
+
+    $check_stmt->execute([$username,$email]);
+    if($check_stmt->rowCount()>0){
+        $message= "error: that Username or Email is Already taken!";
+    }
+    else{
+       try{
     $password_hash=password_hash($password,PASSWORD_DEFAULT);
     $pdo->beginTransaction();
     $sql_user = "INSERT INTO users (username,email,password_hash,full_name,phone,role,status,branch_id) VALUES(?,?,?,?,?,'student','pending',?);";
@@ -52,11 +59,15 @@ try{
      $pdo->commit();
      $message="Registration successful wait for manager approval";
      $success=true;
+     header("refresh:3;url=index.php");
 
 }catch(PDOException $e){
     $pdo->rollBack();
     $message="Registration failed: " . $e->getMessage();
-}
+} 
+    }
+
+
 }
 }
 ?>
