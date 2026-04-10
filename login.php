@@ -1,10 +1,11 @@
 <?php
+session_start();
 require_once "config/db.php";
 $message='';
 $success=false;
 if($_SERVER["REQUEST_METHOD"]=="POST"){
     $username=trim($_POST['username']);
-    $passwrord=trim($_POST['password']);
+    $password=trim($_POST['password']);
     try{
         $get_user=$pdo->prepare("SELECT user_id,username,password_hash,role,full_name,status FROM users WHERE username=?");
         $user=$get_user->execute([$username]);
@@ -18,7 +19,12 @@ if($_SERVER["REQUEST_METHOD"]=="POST"){
                     $message="Your account is not active. Please contact the manager.";
                 }
                 else{
-                    
+                    $_SESSION['user_id']=$user_data['user_id'];
+                    $_SESSION['username']=$user_data['username'];
+                    $_SESSION['role']=$user_data['role'];
+                    $_SESSION['full_name']=$user_data['full_name'];
+                    $success=true;
+                    header("refresh:2;url=dashboard.php");
                 }
 
             }
@@ -27,7 +33,7 @@ if($_SERVER["REQUEST_METHOD"]=="POST"){
             }
         }
     
-    }catch(PDO Exeception r){
+    }catch(PDOException $e){
         $message="Error fetching user: " . $e->getMessage();
     }
 }
