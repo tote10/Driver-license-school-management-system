@@ -1,28 +1,42 @@
 <?php
 require_once 'config/db.php';
+$branch_stmt = $pdo->query("SELECT branch_id,name FROM branches");
+$allBranches= $branch_stmt->fetchAll();
+$message='';
+$success = false;
 if ($_SERVER["REQUEST_METHOD"] == "POST"){
     
-$username=trim($_POST['username']);
-$email=trim($_POST['email']);
-$password=trim($_POST['password']);
-$confirmPassword=trim($_POST['confirmPassword']);
-$nationalID=trim($_POST['nationalID']);
-$date_of_birth=trim($_POST['date_of_birth']);
-$address=trim($_POST['address']);
-$license_category=trim($_POST['license_category']);
-$full_name=trim($_POST['fullname']);
-if($password !== $confirmPassword){
-    die("Passwords do not match");
+$username=trim($_POST['username'] ?? '');
+$email=trim($_POST['email'] ?? '');
+$password=trim($_POST['password'] ?? '');
+$confirmPassword=trim($_POST['confirmPassword'] ?? '');
+$nationalID=trim($_POST['nationalID'] ?? '');
+$date_of_birth=trim($_POST['date_of_birth'] ?? '');
+$address=trim($_POST['address'] ?? '');
+$license_category=trim($_POST['license_category'] ?? '');
+$full_name=trim($_POST['full_name'] ?? '');
+$phone=trim($_POST['phone'] ?? '');
+$branch_id=$_POST['branch_id']
+if(empty($username) || empty($email) || empty($full_name) || empty($password) || empty($phone)){
+    $message="Please fill in all fields";
 }
-$password_hash=password_hash($password,PASSWORD_DEFAULT);
+elseif($password !== $confirmPassword){
+    $message="Passwords do not match";
+}
+
+else{
 try{
-    $sql_user = "INSERT INTO users (username,email,password_hash,full_name,role,status) VALUES(?,?,?,?,'student','pending');";
+    $password_hash=password_hash($password,PASSWORD_DEFAULT);
+    $pdo->beginTransaction();
+    $sql_user = "INSERT INTO users (username,email,password_hash,full_name,phone,role,status,branch_id) VALUES(?,?,?,?,?,'student','pending',?);";
     $stmt = $pdo->prepare($sql_user);
     $stmt->execute([
         $username,
         $email,
         $password_hash,
-        $full_name,      
+        $full_name, 
+        $phone ,
+        $branch_id    
     ]);
      $new_user_id = $pdo->lastInsertId();
      $sql_student = "INSERT INTO students (user_id,national_id,date_of_birth,address,license_category,registration_status) VALUES(?,?,?,?,?,'pending');";
@@ -34,14 +48,21 @@ try{
         $address,
         $license_category,
      ]);
+     
+     $pdo->commit();
      $message="Registration successful wait for manager approval";
-
+     $success=true;
 
 }catch(PDOException $e){
+    $pdo->rollBack();
     $message="Registration failed: " . $e->getMessage();
 }
 }
+}
 ?>
+
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -55,7 +76,7 @@ try{
     <h2>Registration as a Learner</h2>
     <form action="register.php" method="post">
         <label for="name">Full Name:</label>
-        <input type="text" name="fullname" required>
+        <input type="text" name="full_name" required>
         <label for="username">Username:</label>
         <input type="text" name="username" required>
         <label for="email">Email address:</label>
@@ -66,7 +87,17 @@ try{
         <input type="password" name="confirmPassword" required>
         <label for="nationalID">National ID:</label>
         <input type="text" name="nationalID" required>
-        
+        <label for="phone">Phone Number:</label>
+        <input type="text" name="phone" required>
+        <label for="branch_id">Choose Branch:</label>
+        <select name="branch_id" required>
+        <option value="">-- Select a Branch --</option>
+            <?php foreach($allBranches as $branch): ?>
+        <option value="<?php echo $branch['branch_id']; ?>">
+            <?php echo htmlspecialchars($branch['name']); ?>
+        </option>
+        <?php endforeach; ?>
+        </select>
         <label for="dob">Date of Birth:</label>
         <input type="date" name="date_of_birth" required><br><br>
 
