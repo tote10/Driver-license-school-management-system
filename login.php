@@ -31,7 +31,7 @@ if($_SERVER["REQUEST_METHOD"]=="POST"){
             $_SESSION['role']=$user_data['role'];
             $_SESSION['full_name']=$user_data['full_name'];
             $success=true;
-            header("refresh:2;url=dashboard.php");
+            header("refresh:2;url=dashboard_manager.php");
                 }
 
             }catch(PDOException $e){
