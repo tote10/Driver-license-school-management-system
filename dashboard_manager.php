@@ -5,14 +5,16 @@ if(!isset($_SESSION['user_id']) or $_SESSION['role'] !== 'manager'){
     header("Location: login.php");
     exit();
 }
-$message= '';
-try{
-    $stmt_pending=$pdo->prepare("SELECT user_id,full_name,email,created_at FROM users WHERE role='student' AND status='pending'");
-    $stmt_pending->execute();
-    $pending_students=$stmt_pending->fetchAll();
-}catch(PDOException $e){
-    $message="Error fetching pending students: " . $e->getMessage();
+if(isset($_POST['approve_id'])){
+    $student_id = trim($_POST['approve_id']);
+    try{
+        $stmt = $pdo->prepare("UPDATE users SET status='active' WHERE user_id=?");
+        $stmt->execute([$student_id]);
+        $message="Student account activated and approved!";
+    }
 }
+$message= '';
+
 
 ?>
 <!DOCTYPE html>
