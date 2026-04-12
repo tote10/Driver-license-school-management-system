@@ -1,20 +1,28 @@
 <?php
 session_start();
 require_once 'config/db.php';
+$message= '';
 if(!isset($_SESSION['user_id']) or $_SESSION['role'] !== 'manager'){
     header("Location: login.php");
     exit();
 }
 if(isset($_POST['approve_id'])){
-    $student_id = trim($_POST['approve_id']);
+    $student_id=trim($_POST['approve_id']);
     try{
-        $stmt = $pdo->prepare("UPDATE users SET status='active' WHERE user_id=?");
-        $stmt->execute([$student_id]);
-        $message="Student account activated and approved!";
-    }
+    $stmt=$pdo->prepare("UPDATE users SET status='active' WHERE user_id=?");
+    $stmt->execute([$student_id]);
+    $message = "Student approved successfully";
+}catch(PDOException $e){
+    $message = "Error approving student: " . $e->getMessage();
 }
-$message= '';
-
+}
+try{
+    $stmt_pending = $pdo->prepare("SELECT * FROM users WHERE roles='student' AND status='pending'");
+    $stmt_pending->execute();
+    $pending_students = $stmt_pending->fetchAll();
+}catch(PDOException $e){
+    $message = "Error fetching pending students: " . $e->getMessage();
+}
 
 ?>
 <!DOCTYPE html>
