@@ -35,4 +35,38 @@ document.addEventListener("DOMContentLoaded", () => {
       window.location.href = "manager_dashboard.html";
     });
   }
+  // Toast Notification System for prototype buttons
+  const buttons = document.querySelectorAll(
+    '.btn:not([type="submit"]):not([disabled]):not(.text-danger)',
+  );
+
+  if (buttons.length > 0) {
+    const toastContainer = document.createElement("div");
+    toastContainer.className = "toast-container";
+    document.body.appendChild(toastContainer);
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        // Only prevent default if it's a dummy link or a standard button
+        if (
+          (btn.tagName === "A" && btn.getAttribute("href") === "#") ||
+          btn.tagName === "BUTTON"
+        ) {
+          e.preventDefault();
+
+          const toast = document.createElement("div");
+          toast.className = "toast show";
+          toast.innerText = `${btn.innerText.trim()} initiated (Prototype Mode)`;
+
+          toastContainer.appendChild(toast);
+
+          setTimeout(() => {
+            toast.style.opacity = "0";
+            toast.style.transform = "translateY(10px)";
+            setTimeout(() => toast.remove(), 300);
+          }, 2500);
+        }
+      });
+    });
+  }
 });
