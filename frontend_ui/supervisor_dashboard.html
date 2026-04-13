@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Supervisor Dashboard Mockup</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/app.js" defer></script>
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="app-sidebar">
+            <div class="sidebar-brand">DrivingSchool Pro</div>
+            <nav class="sidebar-nav mt-3">
+                <a href="#" class="sidebar-item active"><span class="sidebar-item-icon">👁️</span> Quality Oversight</a>
+                <a href="#" class="sidebar-item"><span class="sidebar-item-icon">🤝</span> Assign Instructors</a>
+                <a href="#" class="sidebar-item"><span class="sidebar-item-icon">📈</span> Student Performance</a>
+                <a href="#" class="sidebar-item"><span class="sidebar-item-icon">✔️</span> Exam Validations</a>
+                <a href="#" class="sidebar-item"><span class="sidebar-item-icon">⚠️</span> Complaints & Feedback</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- App Topbar -->
+            <header class="topbar">
+                <div class="d-flex align-center">
+                    <button class="mobile-toggle" id="mobile-sidebar-toggle">☰</button>
+                    <h1 class="page-title">Quality Oversight</h1>
+                </div>
+                
+                <div class="topbar-profile">
+                    <div class="d-flex flex-col text-right">
+                        <span class="name font-bold text-sm">Elena Supervisor</span>
+                        <span class="role"><span class="badge badge-danger">QA Lead</span></span>
+                    </div>
+                    <div class="avatar">HQ</div>
+                    <a href="login.html" class="btn btn-outline btn-sm text-danger" style="margin-left: 15px; border-color: var(--danger);">Logout</a>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <main class="page-content">
+                <h2 class="welcome-heading">Welcome, QA Lead <span>Elena</span>!</h2>
+                
+                <!-- Action Bar -->
+                <div class="action-bar d-flex flex-wrap gap-md align-center justify-between w-100">
+                    <div class="d-flex flex-wrap gap-md">
+                        <button class="btn btn-warning">Assign Instructors (5)</button>
+                        <button class="btn btn-outline">Review Student Performance</button>
+                        <button class="btn btn-outline">Approve Readiness for Exams</button>
+                        <button class="btn btn-outline">Handle Complaints (1)</button>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline btn-sm">View Audits</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-4 mb-4">
+                    <div class="card">
+                        <h3 class="card-subtitle">Total Active Students</h3>
+                        <div class="stat-value text-primary">84</div>
+                    </div>
+                    <div class="card">
+                        <h3 class="card-subtitle">Instructors Monitored</h3>
+                        <div class="stat-value">6</div>
+                    </div>
+                    <div class="card">
+                        <h3 class="card-subtitle">Pending Assignments</h3>
+                        <div class="stat-value text-warning">5</div>
+                    </div>
+                    <div class="card">
+                        <h3 class="card-subtitle">Pending Validations</h3>
+                        <div class="stat-value text-danger">3</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2">
+                    <!-- Quick Access / Assignment Table -->
+                    <div class="card">
+                        <h3 class="card-subtitle">Assign Instructors to Students</h3>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Program Needs</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="font-bold">Fatima Ali</td>
+                                        <td class="text-sm">Manual Driving</td>
+                                        <td>
+                                            <div class="d-flex gap-sm">
+                                                <select class="form-control" style="padding: 4px; width: auto;">
+                                                    <option>-- Pick Instructor --</option>
+                                                    <option>Mr. James (Active)</option>
+                                                </select>
+                                                <button class="btn btn-primary btn-sm">Assign</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold">Ahmed Nur</td>
+                                        <td class="text-sm">Auto Level 1</td>
+                                        <td>
+                                            <div class="d-flex gap-sm">
+                                                <select class="form-control" style="padding: 4px; width: auto;">
+                                                    <option>-- Pick Instructor --</option>
+                                                    <option>Ms. Lisa (Active)</option>
+                                                </select>
+                                                <button class="btn btn-primary btn-sm">Assign</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Monitoring Overview & Alerts -->
+                    <div class="card">
+                        <h3 class="card-subtitle">Monitoring Overview & Alerts</h3>
+                        <ul class="list-group mt-2">
+                            <li class="list-group-item">
+                                <div class="font-bold d-flex justify-between">
+                                    Instructor David <span class="badge badge-warning">Exam Validation</span>
+                                </div>
+                                <div class="text-sm text-muted mt-1">David flagged John Doe as ready for the final exam. Validate training records.</div>
+                                <button class="btn btn-outline btn-sm mt-2">Review Training Records</button>
+                            </li>
+                            <li class="list-group-item">
+                                <div class="font-bold d-flex justify-between">
+                                    From: Student Tigist <span class="badge badge-danger">Quality Alert</span>
+                                </div>
+                                <div class="text-sm text-muted mt-1">"Instructor was 30 mins late twice." - Issue regarding schedule changes.</div>
+                                <button class="btn btn-outline btn-sm mt-2">View Details</button>
+                            </li>
+                        </ul>
+                        <div class="placeholder-box mt-3" style="min-height: 100px;">
+                            [ Chart: Instructor Performance Comparison ]
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

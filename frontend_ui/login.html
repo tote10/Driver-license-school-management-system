@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Mockup | Driving School</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <div class="container topbar-nav">
+            <a href="login.html" class="topbar-logo">DrivingSchool</a>
+            <ul class="topbar-menu">
+                <li><a href="login.html" class="active">Login</a></li>
+                <li><a href="register.html">Register</a></li>
+            </ul>
+        </div>
+    </header>
+
+    <main class="auth-wrapper container">
+        <div class="card auth-card">
+            <h2 class="text-center mb-4">Secure Login</h2>
+            <form id="demo-login-form">
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-control" placeholder="Enter username" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" placeholder="Enter password" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 mt-2 btn-lg">Log Into Dashboard</button>
+            </form>
+            
+            <div class="mt-4 text-center text-muted text-sm">
+                *Role mapping directly handled securely on the backend based on User DB entry.* 
+                <br><br>
+                <!-- Dev testing links since form just redirects to manager -->
+                <div class="d-flex justify-between flex-wrap gap-xs opacity-50 mt-2" style="font-size: 0.7rem;">
+                    <a href="manager_dashboard.html">Mgr</a> | 
+                    <a href="supervisor_dashboard.html">Sup</a> | 
+                    <a href="instructor_dashboard.html">Inst</a> | 
+                    <a href="student_dashboard.html">Stu</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

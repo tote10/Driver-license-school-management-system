@@ -1,63 +1,44 @@
 <?php
+// login.php - FRONTEND UI MOCKUP
+// No database connection needed for UI review
 session_start();
-require_once "config/db.php";
-$message='';
-$success=false;
-if($_SERVER["REQUEST_METHOD"]=="POST"){
-    $username=trim($_POST['username'] ?? '');
-    $password=trim($_POST['password'] ?? '');
-    if(empty($username) || empty($password)){
-        $message="Please fill in all fields";
-    }
-    else{
-    try{
-        $stmt_user=$pdo->prepare("SELECT user_id,username,password_hash,role,full_name,status FROM users WHERE username=?");
-        $stmt_user->execute([$username]);
-        $user_data=$stmt_user->fetch();
-        if($stmt_user->rowCount()===0){
-            $message="Username Not Found";
-        }
-        
-        
-        elseif(!password_verify($password,$user_data['password_hash'])){
-            $message="Invalid Password";
-        }
-        elseif($user_data['status']!=='active'){
-            $message="Your account is not active. Please contact the manager.";
-        }
-        else{
-            $_SESSION['user_id']=$user_data['user_id'];
-            $_SESSION['username']=$user_data['username'];
-            $_SESSION['role']=$user_data['role'];
-            $_SESSION['full_name']=$user_data['full_name'];
-            $success=true;
-            header("refresh:2;url=dashboard_manager.php");
-                }
-
-            }catch(PDOException $e){
-                $message="Error fetching user: " . $e->getMessage();
-            }
-        }
-    }
-
+include 'includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
-</head>
-<body>
-    <?php if (!empty($message)) echo "<strong>" .htmlspecialchars($message) . "</strong>"; ?>
 
-    <h2>Login Page</h2>
-    <form action="login.php" method="POST">
-        <label for="username">Enter Username:</label>
-        <input type="text" name="username">
-        <label for="password">Enter Password:</label>
-        <input type="password" name="password">
-        <button type="submit">Login</button>
-    </form>
-</body>
-</html>
+<div style="max-width: 400px; margin: 60px auto;">
+    <div class="card">
+        <h2 style="margin-bottom: 20px; text-align: center;">Welcome Back</h2>
+        
+        <form action="#">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" placeholder="Enter username">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="Enter password">
+            </div>
+            
+            <p style="text-align:center; margin: 10px 0; color: var(--text-muted);">
+                <em>(UI Demo - Just click Login)</em>
+            </p>
+            
+            <button type="button" onclick="window.location.href='manager/dashboard.php';" style="width: 100%; margin-top: 10px;">Login (Mockup)</button>
+        </form>
+        
+        <p style="margin-top: 20px; text-align: center; color: var(--text-muted); font-size: 0.9rem;">
+            Don't have an account? <a href="register.php" style="color: var(--primary-color); text-decoration: none;">Register here</a>
+        </p>
+
+        <!-- UI Mockup shortcuts for easy review -->
+        <div style="margin-top: 30px; font-size: 0.85rem; text-align: center; border-top: 1px solid var(--border-color); padding-top: 15px;">
+            <p style="margin-bottom:10px;"><strong>Quick View Dashboard Mockups:</strong></p>
+            <a href="manager/dashboard.php">Manager</a> |
+            <a href="supervisor/dashboard.php">Supervisor</a> |
+            <a href="instructor/dashboard.php">Instructor</a> |
+            <a href="student/dashboard.php">Student</a>
+        </div>
+    </div>
+</div>
+
+<?php include 'includes/footer.php'; ?>

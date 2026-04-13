@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Dashboard Mockup</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/app.js" defer></script>
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="app-sidebar">
+            <div class="sidebar-brand">DrivingSchool Pro</div>
+            <nav class="sidebar-nav mt-3">
+                <a href="#" class="sidebar-item active"><span class="sidebar-item-icon">📈</span> My Progress</a>
+                <a href="#" class="sidebar-item"><span class="sidebar-item-icon">🗓️</span> My Schedule</a>
+                <a href="#" class="sidebar-item"><span class="sidebar-item-icon">🏆</span> Exam Results</a>
+                <a href="#" class="sidebar-item"><span class="sidebar-item-icon">📄</span> Documents & Invoices</a>
+                <a href="#" class="sidebar-item"><span class="sidebar-item-icon">⚙️</span> Settings</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- App Topbar -->
+            <header class="topbar">
+                <div class="d-flex align-center">
+                    <button class="mobile-toggle" id="mobile-sidebar-toggle">☰</button>
+                    <h1 class="page-title">My Dashboard</h1>
+                </div>
+                
+                <div class="topbar-profile">
+                    <div class="d-flex flex-col text-right">
+                        <span class="name font-bold text-sm">John Doe</span>
+                        <span class="role"><span class="badge badge-primary">Learner</span></span>
+                    </div>
+                    <div class="avatar">JD</div>
+                    <a href="login.html" class="btn btn-outline btn-sm text-danger" style="margin-left: 15px; border-color: var(--danger);">Logout</a>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <main class="page-content">
+                <h2 class="welcome-heading">Welcome, John Doe! Your progress: <span>65%</span></h2>
+                
+                <div class="action-bar d-flex flex-wrap gap-md align-center justify-between w-100">
+                    <div class="d-flex flex-wrap gap-md">
+                        <button class="btn btn-primary">View Full Schedule</button>
+                        <button class="btn btn-primary">View Training Progress</button>
+                        <button class="btn btn-outline">Register for Exam</button>
+                        <button class="btn btn-outline opacity-50" disabled>Download Certificate (Locked)</button>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline">Update Profile</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 mb-4">
+                    <div class="card">
+                        <h3 class="card-subtitle">Overall Progress Summary</h3>
+                        
+                        <div class="mt-3">
+                            <div class="d-flex justify-between text-sm font-bold mb-1"><span>Theory Completion</span> <span class="text-success">100%</span></div>
+                            <div class="progress"><div class="progress-bar success" style="width: 100%;"></div></div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="d-flex justify-between text-sm font-bold mb-1"><span>Practical Completion</span> <span>40%</span></div>
+                            <div class="progress"><div class="progress-bar" style="width: 40%;"></div></div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="d-flex justify-between text-sm font-bold mb-1"><span>Hours Completed</span> <span class="text-warning">15 / 30 hrs</span></div>
+                            <div class="progress"><div class="progress-bar warning" style="width: 50%;"></div></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3 class="card-subtitle">Current Status</h3>
+                        <ul class="list-group mt-2">
+                            <li class="list-group-header">
+                                <span class="badge badge-success">Approved</span> Registration
+                            </li>
+                            <li class="text-sm mb-2 text-muted px-2">Automatic Theory + Driving</li>
+                            <li class="list-group-header mt-3">
+                                <span class="badge badge-warning">In Practical Phase</span> Training Status
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="card">
+                        <h3 class="card-subtitle">Next Scheduled Lesson</h3>
+                        <div class="placeholder-box" style="min-height: 120px; border-color: var(--primary); background-color: rgba(26,115,232,0.05); flex-direction: column; text-align: center;">
+                            <p class="text-xl font-bold mb-1 text-primary">Practical Driving</p>
+                            <p class="text-sm font-bold mb-1">📅 Tomorrow, 9:00 AM</p>
+                            <p class="text-sm text-muted mb-0">👨‍🏫 Instructor: David Smith</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2">
+                    <div class="card">
+                        <h3 class="card-subtitle">Upcoming / Recent Exams</h3>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <tr>
+                                    <td class="font-bold">Theory Exam</td>
+                                    <td>Oct 10</td>
+                                    <td><span class="badge badge-success">Passed</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="font-bold">Practical Exam</td>
+                                    <td class="text-muted">Not Scheduled</td>
+                                    <td><span class="badge badge-warning">Pending</span></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3 class="card-subtitle">Recent Activity & Notifications</h3>
+                        <ul class="list-group mt-2">
+                            <li class="list-group-item">
+                                <div class="font-bold d-flex justify-between">
+                                    Practical Lesson #4 
+                                    <span class="badge badge-primary">Score: 85%</span>
+                                </div>
+                                <div class="text-sm text-muted mt-1">Instructor Feedback: "Good control, needs work on parallel parking."</div>
+                            </li>
+                            <li class="list-group-item">
+                                <div class="font-bold d-flex justify-between">
+                                    Practical Lesson #3 
+                                    <span class="badge badge-secondary">Present</span>
+                                </div>
+                                <div class="text-sm text-muted mt-1">Instructor Feedback: "Getting better at lane changes."</div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>
