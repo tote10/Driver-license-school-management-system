@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   // Toast Notification System for prototype buttons
   const buttons = document.querySelectorAll(
-    '.btn:not([type="submit"]):not([disabled]):not(.text-danger)',
+    '.btn:not([type="submit"]):not([disabled]):not(.text-danger), .sidebar-item:not(.active)',
   );
 
   if (buttons.length > 0) {
