@@ -9,7 +9,7 @@ if(!isset($_SESSION['user_id']) || empty($_SESSION['role'])){
 $role=$_SESSION['role'];
 switch($role){
     case 'manager':
-        header("Location: manager/dashboard.php");
+        header("Location: manager/enrollments.php");
         exit();
     case 'instructor':
         header("Location: instructor/dashboard.php");

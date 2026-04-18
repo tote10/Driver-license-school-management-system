@@ -20,6 +20,7 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
     phone VARCHAR(20),
+    gender VARCHAR(10),
     role VARCHAR(30) NOT NULL,
     branch_id INT,
     status VARCHAR(30) DEFAULT 'pending',
@@ -55,6 +56,7 @@ CREATE TABLE instructors (
 CREATE TABLE training_programs (
     program_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    license_category VARCHAR(50) NOT NULL,
     description TEXT,
     course_structure LONGTEXT,
     theory_duration_hours INT,
@@ -66,7 +68,8 @@ CREATE TABLE training_programs (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (branch_id) REFERENCES branches(branch_id) ON DELETE SET NULL,
     FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE SET NULL,
-    INDEX idx_prog_branch (branch_id)
+    INDEX idx_prog_branch (branch_id),
+    INDEX idx_prog_license (license_category)
 );
 
 CREATE TABLE enrollments (
