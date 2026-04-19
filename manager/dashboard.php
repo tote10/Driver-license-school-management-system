@@ -1,78 +1,144 @@
 <?php
-// manager/dashboard.php - FRONTEND UI MOCKUP
 session_start();
-include '../includes/header.php';
-?>
+require_once '../config/db.php';
+if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
+    header("Location: ../login.php");
+    exit();
+}
+$branch_id=$_SESSION['branch_id'];
+$message="";
+try{
+    //tottal students
+    $stmt_students = $pdo->prepare("SELECT status, COUNT(*) as total FROM users WHERE role='student' AND branch_id=? GROUP BY status");
+    $stmt_students->execute([$branch_id]);
+    $student_stats = $stmt_students->fetchAll(PDO::FETCH_KEY_PAIR); 
 
-<h2 style="margin-bottom: 20px;">Manager Command Center</h2>
 
-<!-- Stats Overview Row -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
-    <div class="card" style="margin-bottom: 0;">
-        <h3 style="margin-bottom: 10px; color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase;">Total Students</h3>
-        <div style="font-size: 2rem; font-weight: bold; color: var(--primary-color);">145</div>
-    </div>
-    <div class="card" style="margin-bottom: 0;">
-        <h3 style="margin-bottom: 10px; color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase;">Pending Approvals</h3>
-        <div style="font-size: 2rem; font-weight: bold; color: var(--warning);">2</div>
-    </div>
-    <div class="card" style="margin-bottom: 0;">
-        <h3 style="margin-bottom: 10px; color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase;">Active Programs</h3>
-        <div style="font-size: 2rem; font-weight: bold; color: var(--primary-color);">5</div>
-    </div>
-    <div class="card" style="margin-bottom: 0;">
-        <h3 style="margin-bottom: 10px; color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase;">Monthly Revenue</h3>
-        <div style="font-size: 2rem; font-weight: bold; color: var(--success);">$12,400</div>
-    </div>
-</div>
-
-<!-- Pending Workflow List -->
-<div class="card">
-    <h3 style="margin-bottom: 15px;">Pending Student Approvals</h3>
+    //total staff
+    $stmt_staff = $pdo->prepare("SELECT role, COUNT(*) as total FROM users WHERE role IN ('instructor', 'supervisor') AND branch_id=? GROUP BY role");
+    $stmt_staff->execute([$branch_id]);
+    $staff_stats = $stmt_staff->fetchAll(PDO::FETCH_KEY_PAIR);
     
-    <div style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr>
-                    <th style="padding: 12px; border-bottom: 1px solid var(--border-color); text-align: left; background: #f1f3f5;">Full Name</th>
-                    <th style="padding: 12px; border-bottom: 1px solid var(--border-color); text-align: left; background: #f1f3f5;">National ID</th>
-                    <th style="padding: 12px; border-bottom: 1px solid var(--border-color); text-align: left; background: #f1f3f5;">Requested Category</th>
-                    <th style="padding: 12px; border-bottom: 1px solid var(--border-color); text-align: left; background: #f1f3f5;">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td style="padding: 12px; border-bottom: 1px solid var(--border-color);">Sarah Jenkins</td>
-                    <td style="padding: 12px; border-bottom: 1px solid var(--border-color);">NAT-998811</td>
-                    <td style="padding: 12px; border-bottom: 1px solid var(--border-color);">Auto Level 1</td>
-                    <td style="padding: 12px; border-bottom: 1px solid var(--border-color);">
-                        <div style="display: flex; gap: 10px;">
-                            <select style="padding: 5px;" required>
-                                <option value="">-- Assign Program --</option>
-                                <option value="1">Automatic Theory + Driving (Morning)</option>
-                                <option value="2">Automatic Theory + Driving (Evening)</option>
-                            </select>
-                            <button type="button" onclick="alert('Student Approved & Enrolled!')" style="background: var(--success); color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer;">Approve</button>
-                        </div>
-                    </td>
-                </tr>
-                <tr>
-                    <td style="padding: 12px; border-bottom: 1px solid var(--border-color);">Michael Abebe</td>
-                    <td style="padding: 12px; border-bottom: 1px solid var(--border-color);">NAT-556677</td>
-                    <td style="padding: 12px; border-bottom: 1px solid var(--border-color);">Manual</td>
-                    <td style="padding: 12px; border-bottom: 1px solid var(--border-color);">
-                        <div style="display: flex; gap: 10px;">
-                            <select style="padding: 5px;" required>
-                                <option value="">-- Assign Program --</option>
-                                <option value="3">Manual Mastery Course</option>
-                            </select>
-                            <button type="button" onclick="alert('Student Approved & Enrolled!')" style="background: var(--success); color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer;">Approve</button>
-                        </div>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
+    //total enrollments
+    $stmt_enrollments = $pdo->prepare("
+        SELECT e.current_progress_status, COUNT(*) as total 
+        FROM enrollments e 
+        JOIN users u ON e.student_user_id = u.user_id
+        WHERE u.branch_id = ? 
+        GROUP BY e.current_progress_status
+    ");
+    $stmt_enrollments->execute([$branch_id]);
+    $enrollment_stats = $stmt_enrollments->fetchAll(PDO::FETCH_KEY_PAIR);
 
-<?php include '../includes/footer.php'; ?>
+    //revenu
+    $stmt_revenue=$pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM payments p 
+    JOIN users u ON p.student_user_id=u.user_id
+    WHERE p.status='completed' AND u.branch_id=?");
+    $stmt_revenue->execute([$branch_id]);
+    $total_revenue=$stmt_revenue->fetchColumn();
+
+    //complaints
+    $stmt_comp = $pdo->prepare("
+        SELECT COUNT(*) FROM complaints c 
+        JOIN users u ON c.reporter_user_id = u.user_id 
+        WHERE c.status='open' AND u.branch_id=?
+    ");
+    $stmt_comp->execute([$branch_id]);
+    $open_complaints = $stmt_comp->fetchColumn();
+
+
+    //todays scedule
+    $stmt_sched = $pdo->prepare("SELECT COUNT(*) FROM training_schedules WHERE branch_id=? AND DATE(scheduled_datetime) = CURRENT_DATE()");
+    $stmt_sched->execute([$branch_id]);
+    $todays_classes = $stmt_sched->fetchColumn();
+
+    //upcoming exams
+    $stmt_exams = $pdo->prepare("
+        SELECT COUNT(*) FROM exam_records e 
+        JOIN users u ON e.student_user_id = u.user_id 
+        WHERE e.status='pending_validation' AND u.branch_id=?
+    ");
+    $stmt_exams->execute([$branch_id]);
+    $pending_exams = $stmt_exams->fetchColumn();
+}catch(PDOException $e){
+    $message="Error: " . $e->getMessage();
+}
+
+$active_students = $student_stats['active'] ?? 0;
+$pending_students = $student_stats['pending'] ?? 0;
+$suspended_students = $student_stats['suspended'] ?? 0;
+$total_instructors = $staff_stats['instructor'] ?? 0;
+$total_supervisors = $staff_stats['supervisor'] ?? 0;
+$total_staff = $total_instructors + $total_supervisors;
+$currently_enrolled = $enrollment_stats['enrolled'] ?? 0;
+$completed_programs = $enrollment_stats['completed'] ?? 0;
+$total_revenue = $total_revenue ?? 0;
+$open_complaints = $open_complaints ?? 0;
+$todays_classes = $todays_classes ?? 0;
+$pending_exams = $pending_exams ?? 0;
+
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manager Command Center</title>
+</head>
+<body>
+    <nav style="margin-bottom: 20px; padding: 10px; background: #eee;">
+        <b>Local Manager Module:</b><br><br>
+        <a href="dashboard.php">Command Center</a> | 
+        <a href="users.php">Manage Users</a> | 
+        <a href="programs.php">Training Programs</a> | 
+        <a href="enrollments.php">Registrations & Enrollments</a> | 
+        <a href="../logout.php" style="color: red; margin-left: 15px;">Logout</a>
+    </nav>
+
+    <h2 style="margin-bottom: 20px;">Branch Command Center</h2>
+
+    <?php if($message) echo "<p style='color:red;'>$message</p>"; ?>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+        
+        <!-- Student Box -->
+        <fieldset style="padding: 15px; border: 1px solid #ccc;">
+            <legend style="font-weight: bold;">Students</legend>
+            <ul style="list-style: none; padding: 0;">
+                <li style="color: green; font-size: 1.2rem;"><b>Active:</b> <?php echo $active_students; ?></li>
+                <li style="color: orange;"><b>Awaiting Approval:</b> <?php echo $pending_students; ?></li>
+                <li style="color: red;"><b>Suspended:</b> <?php echo $suspended_students; ?></li>
+            </ul>
+        </fieldset>
+
+        <!-- Operations Box -->
+        <fieldset style="padding: 15px; border: 1px solid #ccc;">
+            <legend style="font-weight: bold;">Operations & Staff</legend>
+            <ul style="list-style: none; padding: 0;">
+                <li style="font-size: 1.2rem;"><b>Total Instructors:</b> <?php echo $total_instructors; ?></li>
+                <li><b>Total Supervisors:</b> <?php echo $total_supervisors; ?></li>
+                <li style="margin-top: 10px; color: blue;"><b>Students currently learning:</b> <?php echo $currently_enrolled; ?></li>
+            </ul>
+        </fieldset>
+
+        <!-- Action Required Box (The Alerts!) -->
+        <fieldset style="padding: 15px; border: 2px solid red; background: #fff5f5;">
+            <legend style="font-weight: bold; color: red;">Action Alerts</legend>
+            <ul style="list-style: none; padding: 0;">
+                <li><b>Open Complaints:</b> <span style="color: red; font-weight: bold;"><?php echo $open_complaints; ?></span></li>
+                <li><b>Exams to Validate:</b> <span style="color: orange; font-weight: bold;"><?php echo $pending_exams; ?></span></li>
+                <li><b>Classes Happening Today:</b> <?php echo $todays_classes; ?></li>
+            </ul>
+        </fieldset>
+
+        <!-- Financial Box -->
+        <fieldset style="padding: 15px; border: 1px solid #ccc; background: #eef9ee;">
+            <legend style="font-weight: bold;">Financials</legend>
+            <div style="font-size: 2.5rem; color: green; font-weight: bold; margin-top: 10px;">
+                $<?php echo number_format($total_revenue, 2); ?>
+            </div>
+            <p style="color: gray; font-size: 0.9rem;">Total Paid Revenue</p>
+        </fieldset>
+
+    </div>
+</body>
+</html>

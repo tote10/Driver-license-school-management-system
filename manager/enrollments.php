@@ -38,14 +38,14 @@ try {
     FROM users u
     JOIN students s ON u.user_id=s.user_id
     JOIN branches b ON u.branch_id=b.branch_id
-    WHERE u.status='pending' AND s.registration_status='pending'");
+    WHERE u.status='pending' AND s.registration_status='pending' AND u.branch_id={$_SESSION['branch_id']}");
     
     $pending_students=$stmt_pending->fetchAll();
 } catch (PDOException $e) {
     $pending_students=[];
 }
 try{
-    $stmt_programs=$pdo->query("SELECT program_id,name,license_category FROM training_programs");
+    $stmt_programs=$pdo->query("SELECT program_id,name,license_category FROM training_programs WHERE branch_id={$_SESSION['branch_id']}");
     $programs=$stmt_programs->fetchAll();
 }catch(PDOException $e){
     $programs=[];
