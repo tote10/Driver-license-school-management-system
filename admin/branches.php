@@ -1,19 +1,15 @@
 <?php
 session_start();
 require_once '../config/db.php';
-
 // 1. SECURITY: Admin Only
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin'){
     header("Location: ../login.php");
     exit();
 }
-
 $message = "";
 $edit_branch = null;
-
 // 2. ROUTING: Handling POST Actions
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
-    
+if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){  
     // A. CREATE OR UPDATE BRANCH
     if($_POST['action'] == 'save'){
         $id = intval($_POST['branch_id'] ?? 0);
@@ -22,7 +18,6 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
         $phone = trim($_POST['contact_phone'] ?? '');
         $email = trim($_POST['contact_email'] ?? '');
         $address = trim($_POST['address'] ?? '');
-
         if(empty($name) || empty($email)){
             $message = "<div class='alert alert-danger'>Name and Email are required!</div>";
         } else {
@@ -43,7 +38,6 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
             }
         }
     }
-
     // B. DELETE BRANCH
     if($_POST['action'] == 'delete'){
         $id = intval($_POST['branch_id'] ?? 0);
@@ -53,7 +47,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
             $chk->execute([$id]);
             if($chk->fetchColumn() > 0){
                 $message = "<div class='alert alert-danger'>Cannot delete: Branch has active users/students.</div>";
-            } else {
+            }else {
                 $stmt = $pdo->prepare("DELETE FROM branches WHERE branch_id = ?");
                 $stmt->execute([$id]);
                 $message = "<div class='alert alert-success'>Branch deleted successfully.</div>";
@@ -63,7 +57,6 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
         }
     }
 }
-
 // 3. FETCHING DATA
 // If editing, get the specific branch row
 if(isset($_GET['edit'])){
@@ -71,10 +64,8 @@ if(isset($_GET['edit'])){
     $stmt_e->execute([intval($_GET['edit'])]);
     $edit_branch = $stmt_e->fetch();
 }
-
 // Get all branches
 $branches = $pdo->query("SELECT * FROM branches ORDER BY name ASC")->fetchAll();
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -99,7 +90,6 @@ $branches = $pdo->query("SELECT * FROM branches ORDER BY name ASC")->fetchAll();
     </style>
 </head>
 <body>
-
     <nav>
         <span style="font-size: 1.2rem; margin-right: 30px;">🛡️ Super Admin</span>
         <a href="dashboard.php">Dashboard</a>
@@ -107,10 +97,8 @@ $branches = $pdo->query("SELECT * FROM branches ORDER BY name ASC")->fetchAll();
         <a href="users.php">Global Users</a>
         <a href="../logout.php" style="float: right; color: #ff6b6b;">Logout</a>
     </nav>
-
     <h2>Branch Management</h2>
     <?php echo $message; ?>
-
     <div class="container">
         <!-- Branch Form -->
         <div class="form-section">
@@ -140,7 +128,6 @@ $branches = $pdo->query("SELECT * FROM branches ORDER BY name ASC")->fetchAll();
                 <?php endif; ?>
             </form>
         </div>
-
         <!-- Branch List -->
         <div class="list-section">
             <h3>Existing School Locations</h3>
@@ -171,6 +158,5 @@ $branches = $pdo->query("SELECT * FROM branches ORDER BY name ASC")->fetchAll();
             </table>
         </div>
     </div>
-
 </body>
 </html>
