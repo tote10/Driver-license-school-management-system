@@ -2,213 +2,125 @@
 session_start();
 require_once '../config/db.php';
 
-// check if manager is logged in
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
     exit();
 }
 
-$message = "";
 $branch_id = $_SESSION['branch_id'];
-$my_id = $_SESSION['user_id'];
+$full_name = $_SESSION['full_name'] ?? 'Manager';
+$message   = "";
 
-// whitelist for safety
-$allowed_cats = ['Automatic', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6'];
-
-// catch message from url
-if(isset($_GET['m'])) {
-    $m = $_GET['m'];
-    if($m == 'created') $message = "<div class='alert alert-success'>Program created!</div>";
-    elseif($m == 'deleted') $message = "<div class='alert alert-success'>Program deleted.</div>";
-    elseif($m == 'updated') $message = "<div class='alert alert-success'>Program updated.</div>";
-    elseif($m == 'busy') $message = "<div class='alert alert-danger'>Cannot delete: students are enrolled here.</div>";
-    elseif($m == 'error') $message = "<div class='alert alert-danger'>Something went wrong. Check your data.</div>";
+// Safe initials
+$name_parts = explode(' ', trim($full_name));
+$initials = strtoupper(substr($name_parts[0], 0, 1));
+if(count($name_parts) > 1) {
+    $initials .= strtoupper(substr(end($name_parts), 0, 1));
 }
 
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
-  
-    // creating new program
-    if($_POST['action'] == 'create'){
-        $name = trim($_POST['name']);
-        $cat = trim($_POST['license_category']);
-        $t_hrs = intval($_POST['theory_duration_hours']);
-        $p_hrs = intval($_POST['practical_duration_hours']);
-        $fee = floatval($_POST['fee_amount']);
-        $desc = trim($_POST['description'] ?? '');
-        
-        // whitelist and range check
-        if(empty($name) || $fee <= 0 || !in_array($cat, $allowed_cats)){
-            header("Location: programs.php?m=error");
-            exit();
-        } else {
-            try {
-                $stmt = $pdo->prepare("INSERT INTO training_programs (branch_id, created_by, name, license_category, theory_duration_hours, practical_duration_hours, fee_amount, description) VALUES (?,?,?,?,?,?,?,?)");
-                $stmt->execute([$branch_id, $my_id, $name, $cat, $t_hrs, $p_hrs, $fee, $desc]);
-                header("Location: programs.php?m=created");
-                exit();
-            } catch(PDOException $e){
-                header("Location: programs.php?m=error");
-                exit();
-            }
-        }
-    }
+// --- ACTION: CREATE PROGRAM ---
+if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'create'){
+    $name = trim($_POST['name'] ?? '');
+    $license_category = trim($_POST['license_category'] ?? '');
+    $theory_hours = intval($_POST['theory_duration_hours'] ?? 0);
+    $practical_hours = intval($_POST['practical_duration_hours'] ?? 0);
+    $fee_amount = floatval($_POST['fee_amount'] ?? 0);
+    $desc = trim($_POST['description'] ?? '');
 
-    // deleting (super safe check)
-    if($_POST['action'] == 'delete'){
-        $pid = intval($_POST['program_id']);
+    if(empty($name) || empty($license_category) || $fee_amount <= 0){
+        $message = "<div class='toast show bg-danger'>Please fill all required fields correctly.</div>";
+    } else {
         try {
-            // anyone enrolled?
-            $chk = $pdo->prepare("SELECT COUNT(*) FROM enrollments WHERE program_id = ?");
-            $chk->execute([$pid]);
-            if($chk->fetchColumn() > 0){
-                header("Location: programs.php?m=busy");
-                exit();
-            } else {
-                // kill it but only in our branch!
-                $stmt = $pdo->prepare("DELETE FROM training_programs WHERE program_id=? AND branch_id=?");
-                $stmt->execute([$pid, $branch_id]);
-                header("Location: programs.php?m=deleted");
-                exit();
-            }
-        } catch(PDOException $e){
-            header("Location: programs.php?m=error");
-            exit();
-        }
-    }
-
-    // update from the big table form
-    if(strpos($_POST['action'], 'update_') === 0){
-        $pid = intval(str_replace('update_', '', $_POST['action']));
-        
-        // grab inputs using the dynamic names
-        $name = trim($_POST["name_$pid"] ?? '');
-        $cat = trim($_POST["cat_$pid"] ?? '');
-        $t_hrs = intval($_POST["t_hrs_$pid"] ?? 0);
-        $p_hrs = intval($_POST["p_hrs_$pid"] ?? 0);
-        $fee = floatval($_POST["fee_$pid"] ?? 0);
-        $desc = trim($_POST["desc_$pid"] ?? '');
-
-        // server side check category and data
-        if(empty($name) || $fee <= 0 || !in_array($cat, $allowed_cats) || $pid <= 0){
-            header("Location: programs.php?m=error");
-            exit();
-        } else {
-            try {
-                // tight branch check here too
-                $stmt = $pdo->prepare("UPDATE training_programs SET name=?, license_category=?, theory_duration_hours=?, practical_duration_hours=?, fee_amount=?, description=?, updated_at=NOW() WHERE program_id=? AND branch_id=?");
-                $stmt->execute([$name, $cat, $t_hrs, $p_hrs, $fee, $desc, $pid, $branch_id]);
-                
-                header("Location: programs.php?m=updated");
-                exit();
-            } catch(PDOException $e){
-                header("Location: programs.php?m=error");
-                exit();
-            }
+            $stmt = $pdo->prepare("INSERT INTO training_programs (name, license_category, description, theory_duration_hours, practical_duration_hours, fee_amount, branch_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $license_category, $desc, $theory_hours, $practical_hours, $fee_amount, $branch_id, $_SESSION['user_id']]);
+            $message = "<div class='toast show'>Successfully created program: $name</div>";
+        } catch(PDOException $e) {
+            $message = "<div class='toast show bg-danger'>Error: " . $e->getMessage() . "</div>";
         }
     }
 }
 
-// pull current branch programs
+// Fetch programs
+$programs = [];
 try {
-    $stmt = $pdo->prepare("SELECT * FROM training_programs WHERE branch_id = ? ORDER BY license_category ASC, name ASC");
+    $stmt = $pdo->prepare("SELECT * FROM training_programs WHERE branch_id = ? ORDER BY name ASC");
     $stmt->execute([$branch_id]);
     $programs = $stmt->fetchAll();
-} catch(PDOException $e) {
-    $programs = [];
-}
+} catch(PDOException $e) {}
+
 ?>
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Manage Programs</title>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Training Programs | Manager Dashboard</title>
+    <link rel="stylesheet" href="../assets/css/style.css" />
+    <script src="../assets/js/app.js" defer></script>
     <style>
-        .alert { padding: 10px; margin-bottom: 20px; border-radius: 4px; font-weight: bold; font-family: sans-serif; }
-        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-family: sans-serif; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background: #f2f2f2; }
-        input, select, textarea { padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
+      .bg-danger { background-color: var(--danger) !important; }
     </style>
-</head>
-<body>
-    <nav style="padding: 10px; background: #eee; margin-bottom: 20px; font-family: sans-serif;">
-        <a href="dashboard.php">Dashboard</a> | <a href="users.php">Users</a> | <a href="programs.php"><b>Programs</b></a> | <a href="enrollments.php">Enrollments</a>
-    </nav>
+  </head>
+  <body>
+    <div class="app-wrapper">
+      <?php include 'includes/sidebar.php'; ?>
 
-    <h2>Manage Training Programs</h2>
-    <?php if($message) echo $message; ?>
+      <div class="main-content">
+        <?php $page_title = 'Training Programs'; include 'includes/topbar.php'; ?>
 
-    <!-- 1. CREATE FORM (Clean and separate) -->
-    <fieldset style="padding: 20px; font-family: sans-serif;">
-        <legend>Create New Program</legend>
-        <form method="POST">
-            <input type="hidden" name="action" value="create">
-            <input type="text" name="name" placeholder="Program Name" required>
-            
-            <select name="license_category" required>
-                <?php foreach($allowed_cats as $cat): ?>
-                    <option value="<?php echo $cat; ?>"><?php echo $cat; ?></option>
-                <?php endforeach; ?>
-            </select>
+        <main class="page-content">
+          <div class="toast-container">
+            <?php if($message) echo $message; ?>
+          </div>
 
-            <input type="number" name="theory_duration_hours" placeholder="Theory Hrs" required style="width:80px;">
-            <input type="number" name="practical_duration_hours" placeholder="Practical Hrs" required style="width:80px;">
-            <input type="number" name="fee_amount" step="0.01" placeholder="Fee ($)" required style="width:100px;">
-            <br><br>
-            <textarea name="description" placeholder="Description" style="width:100%;"></textarea>
-            <br><br>
-            <button type="submit" style="padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer;">Save New Program</button>
-        </form>
-    </fieldset>
+          <div class="card mb-2">
+              <h3 class="card-subtitle">Add New Training Program</h3>
+              <form method="POST" class="mt-3">
+                  <input type="hidden" name="action" value="create">
+                  <div class="grid grid-cols-4 gap-md">
+                      <div class="form-group">
+                          <label class="form-label">Program Name</label>
+                          <input type="text" name="name" class="form-control" placeholder="e.g. Standard License" required>
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">License Category</label>
+                          <input type="text" name="license_category" class="form-control" placeholder="e.g. Auto, Manual" required>
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">Theory (Hours)</label>
+                          <input type="number" name="theory_duration_hours" class="form-control" required>
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">Practical (Hours)</label>
+                          <input type="number" name="practical_duration_hours" class="form-control" required>
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">Fee Amount ($)</label>
+                          <input type="number" step="0.01" name="fee_amount" class="form-control" required>
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">Description</label>
+                          <input type="text" name="description" class="form-control">
+                      </div>
+                  </div>
+                  <button type="submit" class="btn btn-primary mt-2">Create Program</button>
+              </form>
+          </div>
 
-    <!-- 2. THE BIG TABLE FORM (Valid and Robust) -->
-    <form method="POST">
-    <table>
-        <tr>
-            <th>Program Info</th>
-            <th>Hrs (T/P)</th>
-            <th>Fee ($)</th>
-            <th>Actions</th>
-        </tr>
-        <?php foreach($programs as $p): $pid = $p['program_id']; ?>
-        <tr>
-            <td>
-                <!-- explicit names so one form works for all rows -->
-                <input type="text" name="name_<?php echo $pid; ?>" value="<?php echo htmlspecialchars($p['name']); ?>" required style="width:90%;"><br>
-                <small>Category:</small>
-                <select name="cat_<?php echo $pid; ?>" style="margin-top: 5px;">
-                    <?php foreach($allowed_cats as $acat): ?>
-                        <option value="<?php echo $acat; ?>" <?php if($p['license_category']==$acat) echo 'selected'; ?>><?php echo $acat; ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <br>
-                <textarea name="desc_<?php echo $pid; ?>" style="width:90%; height:40px; font-size:11px; margin-top:5px;"><?php echo htmlspecialchars($p['description']); ?></textarea>
-            </td>
-            <td>
-                T: <input type="number" name="t_hrs_<?php echo $pid; ?>" value="<?php echo $p['theory_duration_hours']; ?>" style="width:40px;"><br>
-                P: <input type="number" name="p_hrs_<?php echo $pid; ?>" value="<?php echo $p['practical_duration_hours']; ?>" style="width:40px;">
-            </td>
-            <td>
-                <input type="number" name="fee_<?php echo $pid; ?>" value="<?php echo $p['fee_amount']; ?>" step="0.01" style="width:70px;">
-            </td>
-            <td>
-                <!-- Each button tells the form which row to update -->
-                <button type="submit" name="action" value="update_<?php echo $pid; ?>" style="background: orange; border: none; padding: 8px; cursor: pointer;">Update</button>
-                
-                <br><br>
-                <!-- delete form stays separate inside its own cell -->
-                <form method="POST" onsubmit="return confirm('Kill this entry?');" style="display:inline;">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="program_id" value="<?php echo $pid; ?>">
-                    <button type="submit" style="background: red; color: white; border: none; padding: 8px; cursor: pointer;">Delete</button>
-                </form>
-            </td>
-        </tr>
-        <?php endforeach; ?>
-    </table>
-    </form>
-</body>
+          <div class="grid grid-cols-3">
+            <?php foreach($programs as $p): ?>
+            <div class="card">
+              <h3 class="card-subtitle"><?php echo htmlspecialchars($p['name']); ?></h3>
+              <div class="stat-value" style="font-size: 1.5rem; margin: 10px 0;">$<?php echo number_format($p['fee_amount'], 2); ?></div>
+              <p class="text-sm text-muted mb-4"><?php echo htmlspecialchars($p['description']); ?></p>
+              <div class="d-flex justify-between align-center">
+                  <span class="badge badge-primary"><?php echo $p['theory_duration_hours'] + $p['practical_duration_hours']; ?> Hrs Total</span>
+                  <button class="btn btn-outline btn-sm">Manage</button>
+              </div>
+            </div>
+            <?php endforeach; ?>
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
 </html>

@@ -1,144 +1,237 @@
 <?php
 session_start();
 require_once '../config/db.php';
+
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
     exit();
 }
-$branch_id=$_SESSION['branch_id'];
-$message="";
-try{
-    //tottal students
-    $stmt_students = $pdo->prepare("SELECT status, COUNT(*) as total FROM users WHERE role='student' AND branch_id=? GROUP BY status");
-    $stmt_students->execute([$branch_id]);
-    $student_stats = $stmt_students->fetchAll(PDO::FETCH_KEY_PAIR); 
 
+$branch_id = $_SESSION['branch_id'];
+$full_name = $_SESSION['full_name'] ?? 'Manager';
 
-    //total staff
-    $stmt_staff = $pdo->prepare("SELECT role, COUNT(*) as total FROM users WHERE role IN ('instructor', 'supervisor') AND branch_id=? GROUP BY role");
-    $stmt_staff->execute([$branch_id]);
-    $staff_stats = $stmt_staff->fetchAll(PDO::FETCH_KEY_PAIR);
-    
-    //total enrollments
-    $stmt_enrollments = $pdo->prepare("
-        SELECT e.current_progress_status, COUNT(*) as total 
-        FROM enrollments e 
-        JOIN users u ON e.student_user_id = u.user_id
-        WHERE u.branch_id = ? 
-        GROUP BY e.current_progress_status
-    ");
-    $stmt_enrollments->execute([$branch_id]);
-    $enrollment_stats = $stmt_enrollments->fetchAll(PDO::FETCH_KEY_PAIR);
-
-    //revenu
-    $stmt_revenue=$pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM payments p 
-    JOIN users u ON p.student_user_id=u.user_id
-    WHERE p.status='completed' AND u.branch_id=?");
-    $stmt_revenue->execute([$branch_id]);
-    $total_revenue=$stmt_revenue->fetchColumn();
-
-    //complaints
-    $stmt_comp = $pdo->prepare("
-        SELECT COUNT(*) FROM complaints c 
-        JOIN users u ON c.reporter_user_id = u.user_id 
-        WHERE c.status='open' AND u.branch_id=?
-    ");
-    $stmt_comp->execute([$branch_id]);
-    $open_complaints = $stmt_comp->fetchColumn();
-
-
-    //todays scedule
-    $stmt_sched = $pdo->prepare("SELECT COUNT(*) FROM training_schedules WHERE branch_id=? AND DATE(scheduled_datetime) = CURRENT_DATE()");
-    $stmt_sched->execute([$branch_id]);
-    $todays_classes = $stmt_sched->fetchColumn();
-
-    //upcoming exams
-    $stmt_exams = $pdo->prepare("
-        SELECT COUNT(*) FROM exam_records e 
-        JOIN users u ON e.student_user_id = u.user_id 
-        WHERE e.status='pending_validation' AND u.branch_id=?
-    ");
-    $stmt_exams->execute([$branch_id]);
-    $pending_exams = $stmt_exams->fetchColumn();
-}catch(PDOException $e){
-    $message="Error: " . $e->getMessage();
+// Initials for avatar
+$name_parts = explode(' ', trim($full_name));
+$initials = strtoupper(substr($name_parts[0], 0, 1));
+if(count($name_parts) > 1) {
+    $initials .= strtoupper(substr(end($name_parts), 0, 1));
 }
 
-$active_students = $student_stats['active'] ?? 0;
-$pending_students = $student_stats['pending'] ?? 0;
-$suspended_students = $student_stats['suspended'] ?? 0;
-$total_instructors = $staff_stats['instructor'] ?? 0;
-$total_supervisors = $staff_stats['supervisor'] ?? 0;
-$total_staff = $total_instructors + $total_supervisors;
-$currently_enrolled = $enrollment_stats['enrolled'] ?? 0;
-$completed_programs = $enrollment_stats['completed'] ?? 0;
-$total_revenue = $total_revenue ?? 0;
-$open_complaints = $open_complaints ?? 0;
-$todays_classes = $todays_classes ?? 0;
-$pending_exams = $pending_exams ?? 0;
+try {
+    // 1. Core Alerts (Action Items)
+    $stmt_p = $pdo->prepare("SELECT COUNT(*) FROM enrollments e JOIN users u ON e.student_user_id = u.user_id WHERE u.branch_id = ? AND e.approval_status = 'pending'");
+    $stmt_p->execute([$branch_id]);
+    $pending_enrolls = $stmt_p->fetchColumn();
+
+    $stmt_ex = $pdo->prepare("SELECT COUNT(*) FROM exam_records er JOIN users u ON er.student_user_id = u.user_id WHERE u.branch_id = ? AND er.status = 'pending_approval'");
+    $stmt_ex->execute([$branch_id]);
+    $pending_exams = $stmt_ex->fetchColumn();
+
+    $stmt_grad = $pdo->prepare("
+        SELECT COUNT(*) FROM enrollments e 
+        JOIN users u ON e.student_user_id = u.user_id 
+        WHERE u.branch_id = ? AND e.approval_status = 'approved' AND e.current_progress_status = 'enrolled'
+        AND (SELECT COUNT(*) FROM exam_records WHERE student_user_id = u.user_id AND exam_type = 'theory' AND passed = 1 AND status = 'completed') > 0
+        AND (SELECT COUNT(*) FROM exam_records WHERE student_user_id = u.user_id AND exam_type = 'practical' AND passed = 1 AND status = 'completed') > 0
+    ");
+    $stmt_grad->execute([$branch_id]);
+    $ready_graduation = $stmt_grad->fetchColumn();
+
+    // 2. Stats
+    $stmt_s = $pdo->prepare("SELECT COUNT(*) FROM users WHERE role='student' AND branch_id=? AND status='active'");
+    $stmt_s->execute([$branch_id]);
+    $total_students = $stmt_s->fetchColumn();
+
+    $stmt_ins = $pdo->prepare("SELECT COUNT(*) FROM users WHERE role != 'student' AND branch_id=? AND status='active'");
+    $stmt_ins->execute([$branch_id]);
+    $total_instructors = $stmt_ins->fetchColumn();
+
+    // 3. Analytics
+    // Pass Rate
+    $stmt_exams = $pdo->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN passed=1 THEN 1 ELSE 0 END) as passes FROM exam_records er JOIN users u ON er.student_user_id = u.user_id WHERE u.branch_id = ? AND er.status='completed'");
+    $stmt_exams->execute([$branch_id]);
+    $exam_stats = $stmt_exams->fetch();
+    $pass_rate = ($exam_stats['total'] > 0) ? round(($exam_stats['passes'] / $exam_stats['total']) * 100, 1) : 0;
+
+    // Registration Target (Goal: 50 active students per branch)
+    $reg_target_pct = ($total_students > 0) ? min(100, round(($total_students / 50) * 100)) : 0;
+
+    // Revenue Projections (Goal: $10,000 per branch)
+    $stmt_rev = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments p JOIN users u ON p.student_user_id = u.user_id WHERE u.branch_id = ? AND p.status='paid'");
+    $stmt_rev->execute([$branch_id]);
+    $total_revenue = $stmt_rev->fetchColumn();
+    $revenue_target_pct = ($total_revenue > 0) ? min(100, round(($total_revenue / 10000) * 100)) : 0;
+
+} catch(PDOException $e) {}
 
 ?>
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Manager Command Center</title>
-</head>
-<body>
-    <nav style="margin-bottom: 20px; padding: 10px; background: #eee;">
-        <b>Local Manager Module:</b><br><br>
-        <a href="dashboard.php">Command Center</a> | 
-        <a href="users.php">Manage Users</a> | 
-        <a href="programs.php">Training Programs</a> | 
-        <a href="enrollments.php">Registrations & Enrollments</a> | 
-        <a href="../logout.php" style="color: red; margin-left: 15px;">Logout</a>
-    </nav>
+  <head>
+    <meta charset="UTF-8" />
+    <title>School Overview | Manager Dashboard</title>
+    <link rel="stylesheet" href="../assets/css/style.css" />
+    <script src="../assets/js/app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-wrapper">
+      <!-- Sidebar Navigation -->
+      <?php include 'includes/sidebar.php'; ?>
 
-    <h2 style="margin-bottom: 20px;">Branch Command Center</h2>
+      <!-- Main Content Area -->
+      <div class="main-content">
+        <!-- App Topbar -->
+        <?php $page_title = 'School Overview'; include 'includes/topbar.php'; ?>
 
-    <?php if($message) echo "<p style='color:red;'>$message</p>"; ?>
+        <!-- Page Content -->
+        <main class="page-content">
+          <h2 class="welcome-heading" style="margin-bottom: 20px;">
+            Welcome back, <span><?php echo htmlspecialchars($name_parts[0]); ?></span>!
+          </h2>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
-        
-        <!-- Student Box -->
-        <fieldset style="padding: 15px; border: 1px solid #ccc;">
-            <legend style="font-weight: bold;">Students</legend>
-            <ul style="list-style: none; padding: 0;">
-                <li style="color: green; font-size: 1.2rem;"><b>Active:</b> <?php echo $active_students; ?></li>
-                <li style="color: orange;"><b>Awaiting Approval:</b> <?php echo $pending_students; ?></li>
-                <li style="color: red;"><b>Suspended:</b> <?php echo $suspended_students; ?></li>
-            </ul>
-        </fieldset>
-
-        <!-- Operations Box -->
-        <fieldset style="padding: 15px; border: 1px solid #ccc;">
-            <legend style="font-weight: bold;">Operations & Staff</legend>
-            <ul style="list-style: none; padding: 0;">
-                <li style="font-size: 1.2rem;"><b>Total Instructors:</b> <?php echo $total_instructors; ?></li>
-                <li><b>Total Supervisors:</b> <?php echo $total_supervisors; ?></li>
-                <li style="margin-top: 10px; color: blue;"><b>Students currently learning:</b> <?php echo $currently_enrolled; ?></li>
-            </ul>
-        </fieldset>
-
-        <!-- Action Required Box (The Alerts!) -->
-        <fieldset style="padding: 15px; border: 2px solid red; background: #fff5f5;">
-            <legend style="font-weight: bold; color: red;">Action Alerts</legend>
-            <ul style="list-style: none; padding: 0;">
-                <li><b>Open Complaints:</b> <span style="color: red; font-weight: bold;"><?php echo $open_complaints; ?></span></li>
-                <li><b>Exams to Validate:</b> <span style="color: orange; font-weight: bold;"><?php echo $pending_exams; ?></span></li>
-                <li><b>Classes Happening Today:</b> <?php echo $todays_classes; ?></li>
-            </ul>
-        </fieldset>
-
-        <!-- Financial Box -->
-        <fieldset style="padding: 15px; border: 1px solid #ccc; background: #eef9ee;">
-            <legend style="font-weight: bold;">Financials</legend>
-            <div style="font-size: 2.5rem; color: green; font-weight: bold; margin-top: 10px;">
-                $<?php echo number_format($total_revenue, 2); ?>
+          <!-- Action Bar -->
+          <div
+            class="action-bar d-flex flex-wrap gap-md align-center justify-between w-100"
+          >
+            <div class="d-flex gap-md flex-wrap">
+              <a href="users.php" class="btn btn-primary">+ Add New User</a>
+              <a href="programs.php" class="btn btn-outline">+ New Program</a>
+              <a href="enrollments.php" class="btn btn-outline">Approve Registrations (<?php echo $pending_enrolls; ?>)</a>
             </div>
-            <p style="color: gray; font-size: 0.9rem;">Total Paid Revenue</p>
-        </fieldset>
+            <div>
+              <a href="reports.php" class="btn btn-outline">Generate Reports</a>
+            </div>
+          </div>
 
+          <div class="grid grid-cols-4 mb-4 mt-4">
+            <div class="card">
+              <h3 class="card-subtitle">Total Students</h3>
+              <div class="stat-value text-primary"><?php echo $total_students; ?></div>
+              <div class="text-sm text-success font-bold mt-1">
+                Active in branch
+              </div>
+            </div>
+            <div class="card">
+              <h3 class="card-subtitle">Active Staff</h3>
+              <div class="stat-value"><?php echo $total_instructors; ?></div>
+              <div class="text-sm text-muted mt-1">
+                Total branch staff
+              </div>
+            </div>
+            <div class="card">
+              <h3 class="card-subtitle">Overall Pass Rate</h3>
+              <div class="stat-value text-success"><?php echo $pass_rate; ?>%</div>
+              <div class="text-sm text-muted mt-1">
+                Based on <?php echo $exam_stats['total'] ?? 0; ?> completed exams
+              </div>
+            </div>
+            <div class="card">
+              <h3 class="card-subtitle">Action Required</h3>
+              <div class="stat-value text-warning"><?php echo ($pending_enrolls + $pending_exams + $ready_graduation); ?></div>
+              <div class="text-sm text-muted mt-1">Pending Approvals</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2">
+            <div class="card">
+              <div class="d-flex justify-between align-center mb-2">
+                <h3 class="card-subtitle mb-0">Recent / Pending Items</h3>
+                <span class="badge badge-warning">Action Needed</span>
+              </div>
+              <div class="table-responsive">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php if($pending_enrolls > 0): ?>
+                    <tr>
+                      <td>
+                        <span class="badge badge-warning">Registration</span>
+                      </td>
+                      <td class="font-bold"><?php echo $pending_enrolls; ?> students</td>
+                      <td>
+                        <a href="enrollments.php" class="btn btn-outline btn-sm">Review</a>
+                      </td>
+                    </tr>
+                    <?php endif; ?>
+                    
+                    <?php if($pending_exams > 0): ?>
+                    <tr>
+                      <td>
+                        <span class="badge badge-success">Exam Result</span>
+                      </td>
+                      <td class="font-bold"><?php echo $pending_exams; ?> awaiting</td>
+                      <td>
+                        <a href="exams.php" class="btn btn-primary btn-sm">Approve</a>
+                      </td>
+                    </tr>
+                    <?php endif; ?>
+
+                    <?php if($ready_graduation > 0): ?>
+                    <tr>
+                      <td>
+                        <span class="badge badge-primary">Graduation</span>
+                      </td>
+                      <td class="font-bold"><?php echo $ready_graduation; ?> ready</td>
+                      <td>
+                        <a href="certificates.php" class="btn btn-outline btn-sm">
+                          Issue Cert.
+                        </a>
+                      </td>
+                    </tr>
+                    <?php endif; ?>
+
+                    <?php if(!$pending_enrolls && !$pending_exams && !$ready_graduation): ?>
+                    <tr>
+                        <td colspan="3" class="text-center text-muted">All clear!</td>
+                    </tr>
+                    <?php endif; ?>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="d-flex flex-col gap-lg">
+              <div class="card">
+                <h3 class="card-subtitle">Reports & Analytics Highlights</h3>
+                <div class="mt-4">
+                  <div class="d-flex justify-between text-sm mb-1 font-bold">
+                    <span>Registration Target (50)</span>
+                    <span class="text-primary"><?php echo $reg_target_pct; ?>%</span>
+                  </div>
+                  <div class="progress" style="height: 12px">
+                    <div class="progress-bar" style="width: <?php echo $reg_target_pct; ?>%"></div>
+                  </div>
+
+                  <div class="d-flex justify-between text-sm mb-1 font-bold mt-3">
+                    <span>Revenue Projections ($10k)</span>
+                    <span class="text-success"><?php echo $revenue_target_pct; ?>%</span>
+                  </div>
+                  <div class="progress" style="height: 12px">
+                    <div class="progress-bar success" style="width: <?php echo $revenue_target_pct; ?>%"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <h3 class="card-subtitle">System Health & Notifications</h3>
+                <ul class="list-group mt-2">
+                  <li class="list-group-item text-sm">
+                    ✅ Branch Database: Connected
+                  </li>
+                  <li class="list-group-item text-sm">
+                    ⚠️ <?php echo $pending_enrolls; ?> Registration requests pending
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
-</body>
+  </body>
 </html>

@@ -2,124 +2,181 @@
 session_start();
 require_once '../config/db.php';
 
-// security: manager only
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
     exit();
 }
 
 $branch_id = $_SESSION['branch_id'];
-$message = "";
+$full_name = $_SESSION['full_name'] ?? 'Manager';
+$message   = "";
 
-// --- ACTIONS: UPDATE USER ---
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'update'){
-    $target_id = intval($_POST['user_id'] ?? 0);
-    $new_name = trim($_POST['full_name'] ?? '');
-    $new_phone = trim($_POST['phone'] ?? '');
-    $new_status = $_POST['status'] ?? 'active';
+// Safe initials
+$name_parts = explode(' ', trim($full_name));
+$initials = strtoupper(substr($name_parts[0], 0, 1));
+if(count($name_parts) > 1) {
+    $initials .= strtoupper(substr(end($name_parts), 0, 1));
+}
 
-    if($target_id > 0 && !empty($new_name)){
+// --- ACTION: CREATE STAFF ---
+if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'create'){
+    $username = trim($_POST['username'] ?? '');
+    $name     = trim($_POST['full_name'] ?? '');
+    $email    = trim($_POST['email'] ?? '');
+    $role     = $_POST['role'] ?? '';
+    $password = $_POST['password'] ?? '';
+
+    if(empty($username) || empty($email) || empty($password)){
+        $message = "<div class='toast show bg-danger'>Required fields missing.</div>";
+    } else {
         try {
-            $stmt = $pdo->prepare("UPDATE users SET full_name = ?, phone = ?, status = ? WHERE user_id = ? AND branch_id = ?");
-            $stmt->execute([$new_name, $new_phone, $new_status, $target_id, $branch_id]);
-            $message = "<div style='padding:10px; background:#d4edda; color:#155724; margin-bottom:15px; border-radius:4px;'>User updated successfully!</div>";
-        } catch(PDOException $e) {
-            $message = "<div style='padding:10px; background:#f8d7da; color:#721c24; margin-bottom:15px; border-radius:4px;'>Update failed: " . $e->getMessage() . "</div>";
+            $pdo->beginTransaction();
+            $hash = password_hash($password, PASSWORD_DEFAULT);
+            $stmtUser = $pdo->prepare("INSERT INTO users (username, email, password_hash, full_name, role, branch_id, status) VALUES (?, ?, ?, ?, ?, ?, 'active')");
+            $stmtUser->execute([$username, $email, $hash, $name, $role, $branch_id]);
+            
+            if($role == 'instructor'){
+                $new_id = $pdo->lastInsertId();
+                $stmtIns = $pdo->prepare("INSERT INTO instructors (user_id, years_experience) VALUES (?, 0)");
+                $stmtIns->execute([$new_id]);
+            }
+            $pdo->commit();
+            $message = "<div class='toast show'>Successfully created $role: $name</div>";
+        } catch(Exception $e) {
+            if($pdo->inTransaction()) $pdo->rollBack();
+            $message = "<div class='toast show bg-danger'>Error: " . $e->getMessage() . "</div>";
         }
     }
 }
 
-// --- DATA FETCHing ---
-try {
-    $stmt = $pdo->prepare("
-        SELECT u.user_id, u.full_name, u.role, u.phone, u.status,
-               s.national_id, i.instructor_license_number
-        FROM users u
-        LEFT JOIN students s ON u.user_id = s.user_id
-        LEFT JOIN instructors i ON u.user_id = i.user_id
-        WHERE u.branch_id = ? AND u.user_id != ?
-        ORDER BY u.role, u.full_name
-    ");
-    $stmt->execute([$branch_id, $_SESSION['user_id']]);
-    $branch_users = $stmt->fetchAll();
-} catch(PDOException $e) {
-    $branch_users = [];
-    $message = "Database error: " . $e->getMessage();
+// --- ACTION: UPDATE USER STATUS ---
+if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'update_status'){
+    $target_id = intval($_POST['user_id'] ?? 0);
+    $new_status = $_POST['status'] ?? '';
+    
+    if($target_id > 0 && in_array($new_status, ['active', 'pending', 'suspended', 'rejected'])){
+        try {
+            $stmt = $pdo->prepare("UPDATE users SET status = ? WHERE user_id = ? AND branch_id = ?");
+            $stmt->execute([$new_status, $target_id, $branch_id]);
+            $message = "<div class='toast show'>User status updated to $new_status.</div>";
+        } catch(PDOException $e) {
+            $message = "<div class='toast show bg-danger'>Error: " . $e->getMessage() . "</div>";
+        }
+    }
 }
+
+// Fetch users
+$users = [];
+try {
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE branch_id = ? ORDER BY role DESC, full_name ASC");
+    $stmt->execute([$branch_id]);
+    $users = $stmt->fetchAll();
+} catch(PDOException $e) {}
+
 ?>
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Manage Branch Users</title>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Manage Users | Manager Dashboard</title>
+    <link rel="stylesheet" href="../assets/css/style.css" />
+    <script src="../assets/js/app.js" defer></script>
     <style>
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-family: sans-serif; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background: #f2f2f2; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.85em; color: white; }
-        .instructor { background: #007bff; }
-        .student { background: #28a745; }
-        .supervisor { background: #17a2b8; }
+      .bg-danger { background-color: var(--danger) !important; }
     </style>
-</head>
-<body style="padding: 20px; font-family: sans-serif;">
-    <nav style="margin-bottom: 20px; padding: 10px; background: #eee;">
-        <a href="dashboard.php">Overview</a> | 
-        <a href="users.php"><b>Manage Users</b></a> | 
-        <a href="programs.php">Programs</a> | 
-        <a href="enrollments.php">Enrollments</a>
-    </nav>
+  </head>
+  <body>
+    <div class="app-wrapper">
+      <?php include 'includes/sidebar.php'; ?>
 
-    <h2>Branch Staff & Students</h2>
-    <?php echo $message; ?>
+      <div class="main-content">
+        <?php $page_title = 'Manage Users'; include 'includes/topbar.php'; ?>
 
-    <table>
-        <tr>
-            <th>User Info</th>
-            <th>Contact</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Action</th>
-        </tr>
-        <?php foreach ($branch_users as $user): ?>
-        <tr>
-            <form method="POST">
-                <input type="hidden" name="action" value="update">
-                <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
-                
-                <td>
-                    <input type="text" name="full_name" value="<?php echo htmlspecialchars($user['full_name']); ?>" required style="width: 90%; padding: 5px;"><br>
-                    <small>
-                        <?php 
-                        if($user['role'] == 'student') echo "ID: " . htmlspecialchars($user['national_id']);
-                        if($user['role'] == 'instructor') echo "Lic: " . htmlspecialchars($user['instructor_license_number']);
-                        ?>
-                    </small>
-                </td>
-                <td>
-                    <input type="text" name="phone" value="<?php echo htmlspecialchars($user['phone']); ?>" style="width: 90%; padding: 5px;">
-                </td>
-                <td>
-                    <span class="badge <?php echo $user['role']; ?>"><?php echo strtoupper($user['role']); ?></span>
-                </td>
-                <td>
-                    <select name="status" style="padding: 5px;">
-                        <option value="active" <?php if($user['status'] == 'active') echo 'selected'; ?>>Active</option>
-                        <option value="suspended" <?php if($user['status'] == 'suspended') echo 'selected'; ?>>Suspended</option>
-                        <option value="pending" <?php if($user['status'] == 'pending') echo 'selected'; ?>>Pending</option>
-                    </select>
-                </td>
-                <td>
-                    <button type="submit" style="background:#007bff; color:white; border:none; padding: 6px 12px; cursor:pointer; border-radius:3px;">Save</button>
-                </td>
-            </form>
-        </tr>
-        <?php endforeach; ?>
-    </table>
+        <main class="page-content">
+          <div class="toast-container">
+            <?php if($message) echo $message; ?>
+          </div>
 
-    <?php if(count($branch_users) == 0): ?>
-        <p>No other users found in this branch.</p>
-    <?php endif; ?>
+          <div class="card mb-2">
+              <h3 class="card-subtitle">Add New Staff Member</h3>
+              <form method="POST" class="mt-3">
+                  <input type="hidden" name="action" value="create">
+                  <div class="grid grid-cols-3 gap-md">
+                      <div class="form-group">
+                          <label class="form-label">Username</label>
+                          <input type="text" name="username" class="form-control" required>
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">Full Name</label>
+                          <input type="text" name="full_name" class="form-control" required>
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">Email</label>
+                          <input type="email" name="email" class="form-control" required>
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">Password</label>
+                          <input type="password" name="password" class="form-control" required>
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">Role</label>
+                          <select name="role" class="form-control">
+                              <option value="instructor">Instructor</option>
+                              <option value="supervisor">Supervisor</option>
+                          </select>
+                      </div>
+                  </div>
+                  <button type="submit" class="btn btn-primary mt-2">Create Account</button>
+              </form>
+          </div>
 
-</body>
+          <div class="card">
+            <h3 class="card-subtitle mb-2">Branch Staff Directory</h3>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach($users as $u): ?>
+                  <tr>
+                    <td class="font-bold">
+                        <?php echo htmlspecialchars($u['full_name']); ?><br>
+                        <small class="text-muted">@<?php echo htmlspecialchars($u['username']); ?></small>
+                    </td>
+                    <td><span class="badge badge-primary"><?php echo strtoupper($u['role']); ?></span></td>
+                    <td><?php echo htmlspecialchars($u['email']); ?></td>
+                    <td>
+                      <span class="badge <?php echo $u['status'] == 'active' ? 'badge-success' : 'badge-warning'; ?>">
+                        <?php echo strtoupper($u['status']); ?>
+                      </span>
+                    </td>
+                    <td>
+                        <form method="POST" class="d-flex gap-sm align-center" style="margin:0;">
+                            <input type="hidden" name="action" value="update_status">
+                            <input type="hidden" name="user_id" value="<?php echo $u['user_id']; ?>">
+                            <select name="status" class="form-control" style="padding: 0.3rem; font-size: 0.8rem; width: auto;">
+                                <option value="active" <?php echo $u['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
+                                <option value="pending" <?php echo $u['status'] == 'pending' ? 'selected' : ''; ?>>Pending</option>
+                                <option value="suspended" <?php echo $u['status'] == 'suspended' ? 'selected' : ''; ?>>Suspend</option>
+                            </select>
+                            <button type="submit" class="btn btn-outline btn-sm">Save</button>
+                        </form>
+                    </td>
+                  </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
 </html>

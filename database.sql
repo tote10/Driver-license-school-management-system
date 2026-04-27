@@ -167,27 +167,15 @@ CREATE TABLE exam_records (
     passed TINYINT(1) DEFAULT 0,
     comments TEXT,
     status VARCHAR(30) DEFAULT 'scheduled',
+    recorded_by INT,
     approved_by INT,
-    validated_date DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
     FOREIGN KEY (approved_by) REFERENCES users(user_id) ON DELETE SET NULL,
+    FOREIGN KEY (recorded_by) REFERENCES users(user_id) ON DELETE SET NULL,
     FOREIGN KEY (prerequisite_exam_id) REFERENCES exam_records(exam_id) ON DELETE SET NULL,
     INDEX idx_ex_student (student_user_id),
     INDEX idx_ex_status (status)
-);
-
-CREATE TABLE certificates (
-    certificate_id INT AUTO_INCREMENT PRIMARY KEY,
-    student_user_id INT,
-    certificate_number VARCHAR(100) UNIQUE,
-    issue_date DATE,
-    approved_by INT,
-    national_license_reference VARCHAR(100),
-    certificate_url VARCHAR(255),
-    graduation_status VARCHAR(30) DEFAULT 'issued',
-    FOREIGN KEY (student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (approved_by) REFERENCES users(user_id) ON DELETE SET NULL,
-    INDEX idx_cert_student (student_user_id)
 );
 
 CREATE TABLE notifications (
@@ -246,4 +234,16 @@ CREATE TABLE payments (
     FOREIGN KEY (enrollment_id) REFERENCES enrollments(enrollment_id) ON DELETE SET NULL,
     INDEX idx_pay_student (student_user_id),
     INDEX idx_pay_enrollment (enrollment_id)
+);
+
+CREATE TABLE certificates (
+    certificate_id INT AUTO_INCREMENT PRIMARY KEY,
+    student_user_id INT,
+    enrollment_id INT,
+    certificate_number VARCHAR(50) UNIQUE,
+    issue_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    issued_by INT,
+    FOREIGN KEY (student_user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (enrollment_id) REFERENCES enrollments(enrollment_id) ON DELETE CASCADE,
+    FOREIGN KEY (issued_by) REFERENCES users(user_id) ON DELETE SET NULL
 );
