@@ -19,9 +19,15 @@ if(count($name_parts) > 1) {
 
 try {
     // 1. Core Alerts (Action Items)
-    $stmt_p = $pdo->prepare("SELECT COUNT(*) FROM enrollments e JOIN users u ON e.student_user_id = u.user_id WHERE u.branch_id = ? AND e.approval_status = 'pending'");
-    $stmt_p->execute([$branch_id]);
-    $pending_enrolls = $stmt_p->fetchColumn();
+    $stmt_p1 = $pdo->prepare("SELECT COUNT(*) FROM users WHERE branch_id = ? AND status = 'pending' AND role = 'student'");
+    $stmt_p1->execute([$branch_id]);
+    $pending_accounts = $stmt_p1->fetchColumn();
+
+    $stmt_p2 = $pdo->prepare("SELECT COUNT(*) FROM enrollments e JOIN users u ON e.student_user_id = u.user_id WHERE u.branch_id = ? AND e.approval_status = 'pending'");
+    $stmt_p2->execute([$branch_id]);
+    $pending_enrolls_only = $stmt_p2->fetchColumn();
+    
+    $pending_enrolls = $pending_accounts + $pending_enrolls_only;
 
     $stmt_ex = $pdo->prepare("SELECT COUNT(*) FROM exam_records er JOIN users u ON er.student_user_id = u.user_id WHERE u.branch_id = ? AND er.status = 'pending_approval'");
     $stmt_ex->execute([$branch_id]);
