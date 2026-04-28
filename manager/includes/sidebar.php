@@ -18,13 +18,13 @@
             Exam Schedule
         </a>
         <a href="reports.php" class="sidebar-item <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>">
-            Financial Reports
+            Reports
         </a>
         <a href="certificates.php" class="sidebar-item <?php echo basename($_SERVER['PHP_SELF']) == 'certificates.php' ? 'active' : ''; ?>">
             Certificates & Graduation
         </a>
-        <a href="#" class="sidebar-item">
-            System Logs
-        </a>
+            <a href="audit_logs.php" class="sidebar-item <?php echo basename($_SERVER['PHP_SELF']) == 'audit_logs.php' ? 'active' : ''; ?>">
+                Audit Logs
+            </a>
     </nav>
 </aside>

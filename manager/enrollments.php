@@ -12,6 +12,11 @@ $full_name = $_SESSION['full_name'] ?? 'Manager';
 $message = "";
 $selected_student_id = intval($_GET['student_id'] ?? 0);
 
+function log_audit_action($pdo, $user_id, $action_type, $entity_type, $entity_id, $details) {
+  $stmtLog = $pdo->prepare("INSERT INTO audit_logs (user_id, action_type, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)");
+  $stmtLog->execute([$user_id, $action_type, $entity_type, $entity_id, $details]);
+}
+
 function license_category_matches($student_category, $program_category) {
   return trim((string)$student_category) !== ''
     && trim((string)$program_category) !== ''
@@ -35,6 +40,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
             $stmt->execute([$id]);
             $stmt2 = $pdo->prepare("UPDATE students SET registration_status = 'approved' WHERE user_id = ?");
             $stmt2->execute([$id]);
+            log_audit_action($pdo, $_SESSION['user_id'], 'account_approved', 'user', $id, 'Approved student account ' . $id);
             $message = "<div class='toast show'>Student account activated! They can now log in and select a program.</div>";
         } elseif ($type === 'enrollment') {
             $stmtCheck = $pdo->prepare("
@@ -56,8 +62,16 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
               throw new Exception('License category mismatch. This program is not allowed for the student.');
             }
 
+            // Prevent approving if student already has a certificate for this program
+            $stmtCertCheck = $pdo->prepare("SELECT c.certificate_id FROM certificates c JOIN enrollments e2 ON c.enrollment_id = e2.enrollment_id WHERE c.student_user_id = ? AND e2.program_id = ?");
+            $stmtCertCheck->execute([$enrollment['student_user_id'], $enrollment['program_id']]);
+            if($stmtCertCheck->fetch()){
+              throw new Exception('Student already holds a certificate for this program. Approval blocked.');
+            }
+
             $stmt = $pdo->prepare("UPDATE enrollments SET approval_status = 'approved', approved_date = NOW() WHERE enrollment_id = ?");
             $stmt->execute([$id]);
+            log_audit_action($pdo, $_SESSION['user_id'], 'enrollment_approved', 'enrollment', $id, 'Approved enrollment ' . $id);
             $message = "<div class='toast show'>Program enrollment approved!</div>";
         }
         } catch(Exception $e) { $message = "<div class='toast show bg-danger'>Error: ".$e->getMessage()."</div>"; }
@@ -86,15 +100,23 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
             throw new Exception('License category mismatch. Select a program that matches the student license category.');
           }
 
-        // Check if already enrolled
+        // Check if already enrolled (active)
         $chk = $pdo->prepare("SELECT enrollment_id FROM enrollments WHERE student_user_id=? AND program_id=? AND current_progress_status='enrolled'");
         $chk->execute([$student_id, $program_id]);
         if($chk->fetch()){
-            $message = "<div class='toast show bg-danger'>Student is already enrolled in this program!</div>";
+          $message = "<div class='toast show bg-danger'>Student is already enrolled in this program!</div>";
         } else {
+          // Block if student already graduated (certificate exists for this program)
+          $chkCert = $pdo->prepare("SELECT c.certificate_id FROM certificates c JOIN enrollments e ON c.enrollment_id = e.enrollment_id WHERE c.student_user_id = ? AND e.program_id = ?");
+          $chkCert->execute([$student_id, $program_id]);
+          if($chkCert->fetch()){
+            $message = "<div class='toast show bg-danger'>Student has already completed this program and holds a certificate.</div>";
+          } else {
             $stmt = $pdo->prepare("INSERT INTO enrollments (student_user_id, program_id, approval_status, approved_by, approved_date, current_progress_status) VALUES (?, ?, 'approved', ?, NOW(), 'enrolled')");
             $stmt->execute([$student_id, $program_id, $_SESSION['user_id']]);
+            log_audit_action($pdo, $_SESSION['user_id'], 'manual_enrollment_created', 'enrollment', intval($pdo->lastInsertId()), 'Manually enrolled student ' . $student_id . ' into program ' . $program_id);
             $message = "<div class='toast show'>Student officially enrolled into program!</div>";
+          }
         }
     } catch(Exception $e) { $message = "<div class='toast show bg-danger'>Error: ".$e->getMessage()."</div>"; }
 }

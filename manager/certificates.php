@@ -12,6 +12,11 @@ $manager_id = $_SESSION['user_id'];
 $full_name = $_SESSION['full_name'] ?? 'Manager';
 $message = "";
 
+function log_audit_action($pdo, $user_id, $action_type, $entity_type, $entity_id, $details) {
+  $stmtLog = $pdo->prepare("INSERT INTO audit_logs (user_id, action_type, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)");
+  $stmtLog->execute([$user_id, $action_type, $entity_type, $entity_id, $details]);
+}
+
 // Safe initials
 $name_parts = explode(' ', trim($full_name));
 $initials = strtoupper(substr($name_parts[0], 0, 1));
@@ -54,9 +59,12 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
             
             $stmtC = $pdo->prepare("INSERT INTO certificates (student_user_id, enrollment_id, certificate_number, issued_by) VALUES (?, ?, ?, ?)");
             $stmtC->execute([$sid, $eid, $cert_no, $manager_id]);
+            $certificate_id = $pdo->lastInsertId();
             
             $stmtE = $pdo->prepare("UPDATE enrollments SET current_progress_status = 'completed' WHERE enrollment_id = ?");
             $stmtE->execute([$eid]);
+
+            log_audit_action($pdo, $manager_id, 'certificate_issued', 'certificate', $certificate_id, 'Issued certificate ' . $cert_no . ' for student ' . $sid . ' in enrollment ' . $eid);
             
             $pdo->commit();
             $message = "<div class='toast show'>Certificate Issued: $cert_no. Student has graduated!</div>";
@@ -66,6 +74,42 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
         }
     }
 }
+
+      // reject certificate
+      if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'reject'){
+        $sid = intval($_POST['student_id'] ?? 0);
+        $eid = intval($_POST['enrollment_id'] ?? 0);
+
+        if($sid > 0 && $eid > 0){
+          try {
+            $pdo->beginTransaction();
+
+            $stmtCheck = $pdo->prepare("
+              SELECT u.branch_id, e.student_user_id
+              FROM enrollments e
+              JOIN users u ON e.student_user_id = u.user_id
+              WHERE e.enrollment_id = ? AND e.student_user_id = ?
+            ");
+            $stmtCheck->execute([$eid, $sid]);
+            $row = $stmtCheck->fetch();
+
+            if(!$row || intval($row['branch_id']) !== intval($branch_id)){
+              throw new Exception('Security: enrollment not found in your branch.');
+            }
+
+            $stmtReject = $pdo->prepare("UPDATE enrollments SET current_progress_status = 'failed', last_progress_update = NOW() WHERE enrollment_id = ?");
+            $stmtReject->execute([$eid]);
+
+            log_audit_action($pdo, $manager_id, 'certificate_rejected', 'enrollment', $eid, 'Rejected graduation for student ' . $sid . ' on enrollment ' . $eid);
+
+            $pdo->commit();
+            $message = "<div class='toast show bg-danger'>Graduation rejected. The student can re-enroll later.</div>";
+          } catch(Exception $e) {
+            if($pdo->inTransaction()) $pdo->rollBack();
+            $message = "<div class='toast show bg-danger'>Error: " . $e->getMessage() . "</div>";
+          }
+        }
+      }
 
 $eligible = [];
 try {
@@ -142,11 +186,11 @@ try {
                     <td><?php echo htmlspecialchars($s['program_name']); ?></td>
                     <td><span class="badge badge-success">PASSED ALL EXAMS</span></td>
                     <td>
-                      <form method="POST" style="margin:0;">
-                        <input type="hidden" name="action" value="issue">
+                      <form method="POST" style="margin:0; display:flex; gap:8px; flex-wrap:wrap;">
                         <input type="hidden" name="student_id" value="<?php echo $s['user_id']; ?>">
                         <input type="hidden" name="enrollment_id" value="<?php echo $s['enrollment_id']; ?>">
-                        <button type="submit" class="btn btn-primary btn-sm">Issue Certificate</button>
+                        <button type="submit" name="action" value="issue" class="btn btn-primary btn-sm">Issue Certificate</button>
+                        <button type="submit" name="action" value="reject" class="btn btn-outline btn-sm" style="border-color: var(--danger); color: var(--danger);">Reject</button>
                       </form>
                     </td>
                   </tr>
