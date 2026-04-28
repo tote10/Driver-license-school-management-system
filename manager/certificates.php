@@ -27,6 +27,12 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
     if($sid > 0 && $eid > 0){
         try {
             $pdo->beginTransaction();
+
+          $stmtExisting = $pdo->prepare("SELECT certificate_id FROM certificates WHERE enrollment_id = ?");
+          $stmtExisting->execute([$eid]);
+          if($stmtExisting->fetch()){
+            throw new Exception('A certificate has already been issued for this enrollment.');
+          }
             
             $stmtV = $pdo->prepare("
                 SELECT u.branch_id 
@@ -44,7 +50,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
                 throw new Exception("Security: Student is not eligible or belongs to another branch.");
             }
 
-            $cert_no = "CERT-" . date('Y') . "-" . str_pad($sid, 5, '0', STR_PAD_LEFT);
+            $cert_no = "CERT-" . date('Y') . "-" . str_pad($eid, 5, '0', STR_PAD_LEFT);
             
             $stmtC = $pdo->prepare("INSERT INTO certificates (student_user_id, enrollment_id, certificate_number, issued_by) VALUES (?, ?, ?, ?)");
             $stmtC->execute([$sid, $eid, $cert_no, $manager_id]);

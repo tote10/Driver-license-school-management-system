@@ -88,7 +88,7 @@ $pending = $pending->fetchAll();
   <head>
     <meta charset="UTF-8" />
     <title>Exam Schedule | Manager Dashboard</title>
-    <link rel="stylesheet" href="../assets/css/style.css" />
+    <link rel="stylesheet" href="../assets/css/style.css?v=<?php echo time(); ?>" />
     <script src="../assets/js/app.js" defer></script>
     <style>
       .bg-danger { background-color: var(--danger) !important; }
@@ -106,7 +106,7 @@ $pending = $pending->fetchAll();
             <?php if($message) echo $message; ?>
           </div>
 
-          <div class="card mb-4">
+          <div class="card p-3 mb-1">
               <h3 class="card-subtitle">Schedule New Exam</h3>
               <form method="POST" class="mt-3 d-flex gap-md flex-wrap align-end">
                   <input type="hidden" name="action" value="schedule">
@@ -135,7 +135,7 @@ $pending = $pending->fetchAll();
 
           <div class="grid grid-cols-2">
             <div class="card">
-              <h3 class="card-subtitle mb-3">Active Schedules (Record Results)</h3>
+              <h3 class="card-subtitle mb-1">Active Schedules (Record Results)</h3>
               <div class="table-responsive">
                 <table class="table">
                   <thead>
@@ -173,7 +173,7 @@ $pending = $pending->fetchAll();
             </div>
 
             <div class="card">
-              <h3 class="card-subtitle mb-3">Awaiting Manager Approval</h3>
+              <h3 class="card-subtitle mb-1">Pending Exam Results Approval</h3>
               <div class="table-responsive">
                 <table class="table">
                   <thead>
