@@ -22,6 +22,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
     $name     = trim($_POST['full_name'] ?? '');
     $email    = trim($_POST['email'] ?? '');
     $role     = $_POST['role'] ?? '';
+  $specialization = trim($_POST['specialization'] ?? '');
     $password = $_POST['password'] ?? '';
 
     if(empty($username) || empty($email) || empty($password)){
@@ -35,8 +36,11 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
             
             if($role == 'instructor'){
                 $new_id = $pdo->lastInsertId();
-                $stmtIns = $pdo->prepare("INSERT INTO instructors (user_id, years_experience) VALUES (?, 0)");
-                $stmtIns->execute([$new_id]);
+              if($specialization === ''){
+                $specialization = 'General';
+              }
+              $stmtIns = $pdo->prepare("INSERT INTO instructors (user_id, years_experience, specialization) VALUES (?, 0, ?)");
+              $stmtIns->execute([$new_id, $specialization]);
             }
             $pdo->commit();
             $message = "<div class='toast show'>Successfully created $role: $name</div>";
@@ -199,6 +203,19 @@ try {
                               <option value="supervisor">Supervisor</option>
                           </select>
                       </div>
+                        <div class="form-group">
+                          <label class="form-label">Specialization</label>
+                          <select name="specialization" class="form-control">
+                            <option value="">General</option>
+                            <option value="Auto">Auto</option>
+                            <option value="Level 1">Level 1</option>
+                            <option value="Level 2">Level 2</option>
+                            <option value="Level 3">Level 3</option>
+                            <option value="Level 4">Level 4</option>
+                            <option value="Level 5">Level 5</option>
+                            <option value="Level 6">Level 6</option>
+                          </select>
+                        </div>
                   </div>
                   <button type="submit" class="btn btn-primary mt-2">Create Account</button>
               </form>
