@@ -16,14 +16,17 @@ if(count($name_parts) > 1) {
 }
 
 $progress = [];
+
 try {
     $stmt = $pdo->prepare(
-        "SELECT s.user_id, s.full_name AS student_name, tp.name AS program_name,
-                COUNT(tr.record_id) AS session_count,
-                AVG(tr.performance_score) AS avg_score,
-                SUM(CASE WHEN tr.attendance_status = 'present' THEN 1 ELSE 0 END) AS present_count,
-                SUM(CASE WHEN tr.instructor_recommendation_for_exam = 1 THEN 1 ELSE 0 END) AS exam_ready_count,
-                MAX(tr.created_at) AS last_session
+    "SELECT s.user_id, s.full_name AS student_name, tp.name AS program_name,
+        COUNT(tr.record_id) AS session_count,
+        COUNT(tr.performance_score) AS scored_session_count,
+        SUM(tr.performance_score) AS score_total,
+        AVG(tr.performance_score) AS avg_score,
+        SUM(CASE WHEN tr.attendance_status = 'present' THEN 1 ELSE 0 END) AS present_count,
+        SUM(CASE WHEN tr.instructor_recommendation_for_exam = 1 THEN 1 ELSE 0 END) AS exam_ready_count,
+        MAX(tr.created_at) AS last_session
          FROM users s
          JOIN enrollments e ON e.student_user_id = s.user_id
          JOIN training_programs tp ON tp.program_id = e.program_id
@@ -41,7 +44,7 @@ try {
     $progress = $stmt->fetchAll();
 } catch(PDOException $e) {}
 
-$page_title = 'Student Progress';
+    $page_title = 'Student Progress Dashboard';
 ?>
 <!doctype html>
 <html lang="en">
@@ -60,7 +63,19 @@ $page_title = 'Student Progress';
         <main class="page-content">
           <div class="card mb-4">
             <h3 class="card-subtitle mb-2">Student Progress</h3>
-            <p class="text-sm text-muted mb-3">Track progress across instructors and spot students who are approaching exam readiness.</p>
+            <p class="text-sm text-muted mb-3">Track branch progress across instructors and spot students approaching exam readiness.</p>
+
+            <div class="action-bar d-flex flex-wrap gap-md align-center justify-between w-100 mb-4">
+              <div class="d-flex gap-md flex-wrap">
+                <a href="dashboard.php" class="btn btn-outline">Supervisor Dashboard</a>
+                <a href="assignments.php" class="btn btn-outline">Instructor Assignments</a>
+                <a href="complaints.php" class="btn btn-outline">Complaints</a>
+              </div>
+              <div>
+                <a href="schedules.php" class="btn btn-outline">Schedules</a>
+              </div>
+            </div>
+
             <div class="table-responsive">
               <table class="table">
                 <thead>
@@ -69,7 +84,9 @@ $page_title = 'Student Progress';
                     <th>Program</th>
                     <th>Sessions</th>
                     <th>Avg Score</th>
-                    <th>Ready Marks</th>
+                    <th>Present</th>
+                    <th>Ready</th>
+                    <th>Last Session</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -79,11 +96,13 @@ $page_title = 'Student Progress';
                     <td><?php echo htmlspecialchars($row['program_name']); ?></td>
                     <td><?php echo intval($row['session_count']); ?></td>
                     <td><?php echo $row['avg_score'] !== null ? number_format((float)$row['avg_score'], 2) : '-'; ?></td>
-                    <td><?php echo intval($row['exam_ready_count']); ?></td>
+                    <td><?php echo intval($row['present_count']); ?></td>
+                    <td><?php echo intval($row['exam_ready_count']) > 0 ? 'Yes' : 'No'; ?></td>
+                    <td><?php echo $row['last_session'] ? date('Y-m-d H:i', strtotime($row['last_session'])) : '-'; ?></td>
                   </tr>
                   <?php endforeach; ?>
                   <?php if(count($progress) === 0): ?>
-                  <tr><td colspan="5" class="text-center text-muted">No student progress data available yet.</td></tr>
+                  <tr><td colspan="7" class="text-center text-muted">No student progress data available yet.</td></tr>
                   <?php endif; ?>
                 </tbody>
               </table>

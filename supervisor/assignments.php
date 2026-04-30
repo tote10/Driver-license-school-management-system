@@ -83,7 +83,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'assign
         SELECT assignment_id, instructor_user_id
         FROM instructor_assignments
         WHERE student_user_id = ? AND status = 'active'
-        LIMIT 1
+          LIMIT 1
+          FOR UPDATE
         ");
         $stmtActive->execute([$student_id]);
         $active = $stmtActive->fetch();

@@ -93,6 +93,7 @@ $page_title = 'Supervisor Dashboard';
             </div>
             <div>
               <a href="progress.php" class="btn btn-outline">Student Progress</a>
+              <a href="schedules.php" class="btn btn-outline">Schedules</a>
             </div>
           </div>
 
@@ -128,6 +129,7 @@ $page_title = 'Supervisor Dashboard';
                     <tr><td>Assign instructors to approved students</td><td><a href="assignments.php" class="btn btn-outline btn-sm">Open</a></td></tr>
                     <tr><td>Review training records and readiness</td><td><a href="reviews.php" class="btn btn-outline btn-sm">Open</a></td></tr>
                     <tr><td>Track student progress across instructors</td><td><a href="progress.php" class="btn btn-outline btn-sm">Open</a></td></tr>
+                    <tr><td>Review branch schedules and session timing</td><td><a href="schedules.php" class="btn btn-outline btn-sm">Open</a></td></tr>
                     <tr><td>Handle complaints and forward serious ones</td><td><a href="complaints.php" class="btn btn-outline btn-sm">Open</a></td></tr>
                   </tbody>
                 </table>

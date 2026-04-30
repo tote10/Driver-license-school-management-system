@@ -103,6 +103,7 @@ try {
               <a href="users.php" class="btn btn-primary">+ Add New User</a>
               <a href="programs.php" class="btn btn-outline">+ New Program</a>
               <a href="enrollments.php" class="btn btn-outline">Approve Registrations (<?php echo $pending_enrolls; ?>)</a>
+              <a href="schedules.php" class="btn btn-outline">Lesson Schedules</a>
             </div>
             <div>
               <a href="reports.php" class="btn btn-outline">Generate Reports</a>

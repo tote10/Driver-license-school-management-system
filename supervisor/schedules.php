@@ -16,22 +16,23 @@ if(count($name_parts) > 1) {
 }
 
 $schedules = [];
+
 try {
     $stmt = $pdo->prepare(
-        "SELECT sch.schedule_id, sch.lesson_type, sch.scheduled_datetime, sch.duration_minutes, sch.location,
+    "SELECT sch.schedule_id, sch.lesson_type, sch.scheduled_datetime, sch.duration_minutes, sch.location, sch.status,
                 s.full_name AS student_name, i.full_name AS instructor_name
          FROM training_schedules sch
          JOIN users s ON sch.student_user_id = s.user_id
          JOIN users i ON sch.instructor_user_id = i.user_id
          WHERE sch.branch_id = ?
-         ORDER BY sch.scheduled_datetime ASC
-         LIMIT 50"
+     ORDER BY sch.scheduled_datetime ASC
+     LIMIT 50"
     );
     $stmt->execute([$branch_id]);
     $schedules = $stmt->fetchAll();
 } catch(PDOException $e) {}
 
-$page_title = 'Training Schedules';
+  $page_title = 'Training Schedules';
 ?>
 <!doctype html>
 <html lang="en">
@@ -50,7 +51,19 @@ $page_title = 'Training Schedules';
         <main class="page-content">
           <div class="card mb-4">
             <h3 class="card-subtitle mb-2">Training Schedules</h3>
-            <p class="text-sm text-muted mb-3">View branch training sessions here. Scheduling actions can be added later without changing the page structure.</p>
+            <p class="text-sm text-muted mb-3">Review branch lesson timing, track status, and spot upcoming sessions quickly.</p>
+
+            <div class="action-bar d-flex flex-wrap gap-md align-center justify-between w-100 mb-4">
+              <div class="d-flex gap-md flex-wrap">
+                <a href="dashboard.php" class="btn btn-outline">Supervisor Dashboard</a>
+                <a href="assignments.php" class="btn btn-outline">Instructor Assignments</a>
+                <a href="progress.php" class="btn btn-outline">Student Progress</a>
+              </div>
+              <div>
+                <a href="complaints.php" class="btn btn-outline">Complaints</a>
+              </div>
+            </div>
+
             <div class="table-responsive">
               <table class="table">
                 <thead>

@@ -14,6 +14,9 @@
         <a href="enrollments.php" class="sidebar-item <?php echo basename($_SERVER['PHP_SELF']) == 'enrollments.php' ? 'active' : ''; ?>">
             Registrations & Enrollments
         </a>
+        <a href="schedules.php" class="sidebar-item <?php echo basename($_SERVER['PHP_SELF']) == 'schedules.php' ? 'active' : ''; ?>">
+            Lesson Schedules
+        </a>
         <a href="exams.php" class="sidebar-item <?php echo basename($_SERVER['PHP_SELF']) == 'exams.php' ? 'active' : ''; ?>">
             Exam Schedule
         </a>
