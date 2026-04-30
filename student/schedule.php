@@ -40,29 +40,13 @@ foreach ($all as $row) {
     <link rel="stylesheet" href="../assets/css/style.css?v=<?php echo time(); ?>" />
   </head>
   <body>
-    <div class="page-shell">
-      <header class="topbar" style="position: static; border-radius: 18px; margin-bottom: 20px;">
-        <div class="d-flex align-center gap-md">
-          <div>
-            <h1 class="page-title"><?php echo htmlspecialchars($page_title); ?></h1>
-            <div class="text-sm text-muted">Your scheduled lessons</div>
-          </div>
-        </div>
-        <div class="d-flex align-center gap-md">
-          <div class="topbar-profile" style="cursor: default;">
-            <div class="d-flex flex-col text-right">
-              <span class="name font-bold text-sm"><?php echo htmlspecialchars($_SESSION['full_name'] ?? ''); ?></span>
-              <span class="role"><span class="badge badge-primary">Student</span></span>
-            </div>
-            <div class="avatar"><?php $n = $_SESSION['full_name'] ?? ''; $p = explode(' ', trim($n)); $init = strtoupper(substr($p[0]??'',0,1)); if(count($p)>1) $init .= strtoupper(substr(end($p),0,1)); echo htmlspecialchars($init); ?></div>
-          </div>
-          <a href="../logout.php" class="btn btn-outline btn-sm text-danger" style="border-color: var(--danger)">Logout</a>
-        </div>
-      </header>
+    <div class="app-wrapper">
+      <?php include __DIR__ . '/includes/sidebar.php'; ?>
+      <div class="main-content">
+        <?php include __DIR__ . '/includes/topbar.php'; ?>
 
-      <main class="page-content" style="padding:0; max-width:none;">
-        <div class="grid grid-cols-2 gap-md">
-          <div class="card">
+      <main class="page-content">
+        <div class="card mb-4">
             <h3 class="card-subtitle mb-2">Upcoming Lessons</h3>
             <div class="table-responsive">
               <table class="table">
@@ -83,7 +67,7 @@ foreach ($all as $row) {
                 </tbody>
               </table>
             </div>
-          </div>
+        </div>
 
           <div class="card">
             <h3 class="card-subtitle mb-2">Past Lessons</h3>
@@ -107,8 +91,8 @@ foreach ($all as $row) {
               </table>
             </div>
           </div>
-        </div>
       </main>
+      </div>
     </div>
   </body>
 </html>

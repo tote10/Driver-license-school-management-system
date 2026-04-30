@@ -8,6 +8,7 @@ if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'student'){
 }
 
 $student_id = intval($_SESSION['user_id']);
+$page_title = 'Submit Complaint';
 $message = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $subject_type = trim($_POST['subject_type'] ?? 'general');
@@ -31,16 +32,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="../assets/css/style.css?v=<?php echo time(); ?>" />
   </head>
   <body>
-    <div class="page-shell">
-      <header class="topbar" style="position: static; border-radius: 18px; margin-bottom: 20px;">
-        <div class="d-flex align-center gap-md">
-          <div>
-            <h1 class="page-title">Submit Complaint</h1>
-            <div class="text-sm text-muted">Report issues to management</div>
-          </div>
-        </div>
-      </header>
-      <main class="page-content" style="padding:0; max-width:none;">
+    <div class="app-wrapper">
+      <?php include __DIR__ . '/includes/sidebar.php'; ?>
+      <div class="main-content">
+        <?php include __DIR__ . '/includes/topbar.php'; ?>
+      <main class="page-content">
         <div class="card">
           <?php if ($message): ?><div class="text-sm" style="color: green; margin-bottom:8px"><?php echo htmlspecialchars($message); ?></div><?php endif; ?>
           <form method="POST" class="grid grid-cols-2 gap-md">
@@ -63,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </form>
         </div>
       </main>
+      </div>
     </div>
   </body>
 </html>

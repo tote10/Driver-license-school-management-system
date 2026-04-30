@@ -8,6 +8,7 @@ if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'student'){
 }
 
 $user_id = intval($_SESSION['user_id']);
+$page_title = 'Notifications';
 try {
     $stmt = $pdo->prepare("SELECT * FROM notifications WHERE recipient_user_id = ? ORDER BY sent_at DESC LIMIT 100");
     $stmt->execute([$user_id]);
@@ -25,16 +26,11 @@ try {
     <link rel="stylesheet" href="../assets/css/style.css?v=<?php echo time(); ?>" />
   </head>
   <body>
-    <div class="page-shell">
-      <header class="topbar" style="position: static; border-radius: 18px; margin-bottom: 20px;">
-        <div class="d-flex align-center gap-md">
-          <div>
-            <h1 class="page-title">Notifications</h1>
-            <div class="text-sm text-muted">Recent updates for your account</div>
-          </div>
-        </div>
-      </header>
-      <main class="page-content" style="padding:0; max-width:none;">
+    <div class="app-wrapper">
+      <?php include __DIR__ . '/includes/sidebar.php'; ?>
+      <div class="main-content">
+        <?php include __DIR__ . '/includes/topbar.php'; ?>
+      <main class="page-content">
         <div class="card">
           <ul style="list-style:none; padding:0; margin:0;">
             <?php foreach($notes as $n): ?>
@@ -52,6 +48,7 @@ try {
           </ul>
         </div>
       </main>
+      </div>
     </div>
   </body>
 </html>

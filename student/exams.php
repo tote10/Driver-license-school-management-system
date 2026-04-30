@@ -32,20 +32,12 @@ try {
     <link rel="stylesheet" href="../assets/css/style.css?v=<?php echo time(); ?>" />
   </head>
   <body>
-    <div class="page-shell">
-      <header class="topbar" style="position: static; border-radius: 18px; margin-bottom: 20px;">
-        <div class="d-flex align-center gap-md">
-          <div>
-            <h1 class="page-title"><?php echo htmlspecialchars($page_title); ?></h1>
-            <div class="text-sm text-muted">Your exam schedule and results</div>
-          </div>
-        </div>
-        <div class="d-flex align-center gap-md">
-          <div class="topbar-profile" style="cursor: default;"><?php echo htmlspecialchars($_SESSION['full_name'] ?? ''); ?></div>
-        </div>
-      </header>
+    <div class="app-wrapper">
+      <?php include __DIR__ . '/includes/sidebar.php'; ?>
+      <div class="main-content">
+        <?php include __DIR__ . '/includes/topbar.php'; ?>
 
-      <main class="page-content" style="padding:0; max-width:none;">
+      <main class="page-content">
         <div class="card">
           <h3 class="card-subtitle mb-2">Exam History</h3>
           <div class="table-responsive">
@@ -68,6 +60,7 @@ try {
           </div>
         </div>
       </main>
+      </div>
     </div>
   </body>
 </html>

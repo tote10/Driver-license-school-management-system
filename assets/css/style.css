@@ -244,6 +244,8 @@ p {
   z-index: 100;
   box-shadow: var(--shadow-sm);
   min-height: 70px;
+  gap: var(--space-md);
+  flex-wrap: wrap;
 }
 .topbar-nav {
   display: flex;
@@ -289,6 +291,22 @@ p {
   display: flex;
   align-items: center;
   gap: var(--space-md);
+  min-width: 0;
+}
+.topbar-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.topbar-profile-meta {
+  min-width: 0;
+}
+.topbar-profile .name {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .topbar-profile .avatar {
   width: 40px;
@@ -377,6 +395,9 @@ p {
   .topbar-profile .name,
   .topbar-profile .role {
     display: none;
+  }
+  .topbar-actions {
+    margin-left: auto;
   }
 }
 

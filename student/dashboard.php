@@ -41,7 +41,7 @@ $stats = [
     'ready' => 0,
 ];
 
-try {
+  try {
     $stmtProfile = $pdo->prepare(
         "SELECT u.user_id, u.full_name, u.email, u.phone,
                 s.license_category, s.registration_status, s.registration_date
@@ -132,6 +132,15 @@ try {
     );
     $stmtExams->execute([$student_id]);
     $exam_records = $stmtExams->fetchAll(PDO::FETCH_ASSOC);
+    $stmtNotifications = $pdo->prepare(
+      "SELECT n.notification_id, n.title, n.message, n.created_at, n.is_read
+       FROM notifications n
+       WHERE n.user_id = ?
+       ORDER BY n.created_at DESC
+       LIMIT 3"
+    );
+    $stmtNotifications->execute([$student_id]);
+    $notifications = $stmtNotifications->fetchAll(PDO::FETCH_ASSOC);
 } catch(PDOException $e) {}
 ?>
 <!doctype html>
@@ -158,31 +167,16 @@ try {
     </style>
   </head>
   <body>
-    <div class="page-shell">
-      <header class="topbar" style="position: static; border-radius: 18px; margin-bottom: 20px;">
-        <div class="d-flex align-center gap-md">
-          <div>
-            <h1 class="page-title"><?php echo htmlspecialchars($page_title); ?></h1>
-            <div class="text-sm text-muted">Your training and exam overview</div>
-          </div>
-        </div>
-        <div class="d-flex align-center gap-md">
-          <div class="topbar-profile" style="cursor: default;">
-            <div class="d-flex flex-col text-right">
-              <span class="name font-bold text-sm"><?php echo htmlspecialchars($full_name); ?></span>
-              <span class="role"><span class="badge badge-primary">Student</span></span>
-            </div>
-            <div class="avatar"><?php echo htmlspecialchars($initials); ?></div>
-          </div>
-          <a href="../logout.php" class="btn btn-outline btn-sm text-danger" style="border-color: var(--danger)">Logout</a>
-        </div>
-      </header>
+    <div class="app-wrapper">
+      <?php include __DIR__ . '/includes/sidebar.php'; ?>
+      <div class="main-content">
+        <?php include __DIR__ . '/includes/topbar.php'; ?>
 
-      <main class="page-content" style="padding: 0; max-width: none;">
+      <main class="page-content">
         <div class="hero-bar d-flex flex-wrap justify-between gap-md align-center">
           <div>
             <h2 class="welcome-heading" style="margin-bottom: 6px;">Welcome back, <span><?php echo htmlspecialchars($name_parts[0]); ?></span>!</h2>
-            <p class="text-sm text-muted mb-0">Follow your progress, instructor, and upcoming lessons from one place.</p>
+            <p class="text-sm text-muted mb-0">Quick overview of your program, instructor and upcoming lesson.</p>
           </div>
           <div class="d-flex gap-sm flex-wrap">
             <span class="badge badge-outline">License: <?php echo htmlspecialchars($profile['license_category'] ?? 'N/A'); ?></span>
@@ -202,9 +196,9 @@ try {
             <div class="text-sm text-muted mt-1"><?php echo htmlspecialchars($assigned_instructor['specialization'] ?? 'Waiting for assignment'); ?></div>
           </div>
           <div class="card">
-            <h3 class="card-subtitle">Average Score</h3>
-            <div class="stat-value text-primary"><?php echo $stats['avg_score'] !== null ? number_format((float)$stats['avg_score'], 2) : '-'; ?></div>
-            <div class="text-sm text-muted mt-1">Across all records</div>
+            <h3 class="card-subtitle">Sessions</h3>
+            <div class="stat-value text-primary"><?php echo intval($stats['sessions']); ?></div>
+            <div class="text-sm text-muted mt-1">Total training sessions</div>
           </div>
           <div class="card">
             <h3 class="card-subtitle">Next Lesson</h3>
@@ -215,145 +209,33 @@ try {
 
         <div class="grid grid-cols-2 gap-md">
           <div class="card">
-            <h3 class="card-subtitle mb-2">My Training Overview</h3>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Program</th>
-                    <th>Status</th>
-                    <th>Enrolled</th>
-                    <th>Instructor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td class="font-bold"><?php echo htmlspecialchars($active_enrollment['program_name'] ?? 'No active program'); ?></td>
-                    <td><span class="badge <?php echo student_badge_class($active_enrollment['current_progress_status'] ?? 'pending'); ?>"><?php echo htmlspecialchars($active_enrollment['current_progress_status'] ?? 'Pending'); ?></span></td>
-                    <td><?php echo !empty($active_enrollment['enrollment_date']) ? date('Y-m-d', strtotime($active_enrollment['enrollment_date'])) : '-'; ?></td>
-                    <td><?php echo htmlspecialchars($assigned_instructor['instructor_name'] ?? 'Not assigned'); ?></td>
-                  </tr>
-                  <?php if(empty($active_enrollment)): ?>
-                  <tr><td colspan="4" class="text-center text-muted">You do not have an active enrolled program yet.</td></tr>
-                  <?php endif; ?>
-                </tbody>
-              </table>
-            </div>
+            <h3 class="card-subtitle mb-2">Notifications</h3>
+            <?php if(!empty($notifications)): ?>
+              <ul class="list-unstyled">
+                <?php foreach($notifications as $n): ?>
+                  <li class="mb-2">
+                    <div class="font-bold"><?php echo htmlspecialchars($n['title']); ?></div>
+                    <div class="text-sm text-muted mb-1"><?php echo htmlspecialchars(substr($n['message'],0,120)); ?><?php echo strlen($n['message'])>120? '…': ''; ?></div>
+                    <div class="text-xs text-muted"><?php echo date('M d, H:i', strtotime($n['created_at'])); ?></div>
+                  </li>
+                <?php endforeach; ?>
+              </ul>
+            <?php else: ?>
+              <div class="text-muted">No notifications</div>
+            <?php endif; ?>
           </div>
 
           <div class="card">
-            <h3 class="card-subtitle mb-2">Upcoming Lesson</h3>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Instructor</th>
-                    <th>Lesson</th>
-                    <th>Date & Time</th>
-                    <th>Location</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td class="font-bold"><?php echo htmlspecialchars($next_lesson['instructor_name'] ?? 'No lesson yet'); ?></td>
-                    <td><?php echo htmlspecialchars($next_lesson['lesson_type'] ?? '-'); ?></td>
-                    <td><?php echo !empty($next_lesson['scheduled_datetime']) ? date('Y-m-d H:i', strtotime($next_lesson['scheduled_datetime'])) : '-'; ?></td>
-                    <td><?php echo htmlspecialchars($next_lesson['location'] ?? '-'); ?></td>
-                  </tr>
-                  <?php if(empty($next_lesson)): ?>
-                  <tr><td colspan="4" class="text-center text-muted">No upcoming lesson scheduled yet.</td></tr>
-                  <?php endif; ?>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-md mt-4">
-          <div class="card">
-            <h3 class="card-subtitle mb-2">Recent Training Records</h3>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Lesson</th>
-                    <th>Score</th>
-                    <th>Attendance</th>
-                    <th>Ready</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php foreach($recent_records as $record): ?>
-                  <tr>
-                    <td><?php echo date('Y-m-d H:i', strtotime($record['created_at'])); ?></td>
-                    <td><?php echo htmlspecialchars($record['lesson_type']); ?></td>
-                    <td><?php echo $record['performance_score'] !== null ? number_format((float)$record['performance_score'], 2) : '-'; ?></td>
-                    <td><span class="badge <?php echo student_badge_class($record['attendance_status']); ?>"><?php echo htmlspecialchars($record['attendance_status']); ?></span></td>
-                    <td><?php echo intval($record['instructor_recommendation_for_exam']) === 1 ? 'Yes' : 'No'; ?></td>
-                  </tr>
-                  <?php endforeach; ?>
-                  <?php if(count($recent_records) === 0): ?>
-                  <tr><td colspan="5" class="text-center text-muted">No training records found yet.</td></tr>
-                  <?php endif; ?>
-                </tbody>
-              </table>
+            <h3 class="card-subtitle mb-2">Program Progress</h3>
+            <div class="text-sm text-muted"><?php echo htmlspecialchars($active_enrollment['program_name'] ?? 'No active program'); ?></div>
+            <div class="mt-2">
+              <div class="badge <?php echo student_badge_class($active_enrollment['current_progress_status'] ?? 'pending'); ?>"><?php echo htmlspecialchars($active_enrollment['current_progress_status'] ?? 'Pending'); ?></div>
             </div>
           </div>
 
-          <div class="card">
-            <h3 class="card-subtitle mb-2">Exam History</h3>
-            <div class="table-responsive">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Score</th>
-                    <th>Scheduled</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php foreach($exam_records as $exam): ?>
-                  <tr>
-                    <td class="font-bold"><?php echo htmlspecialchars($exam['exam_type']); ?></td>
-                    <td><span class="badge <?php echo student_badge_class($exam['status']); ?>"><?php echo htmlspecialchars($exam['status']); ?></span></td>
-                    <td><?php echo $exam['score'] !== null ? intval($exam['score']) : '-'; ?></td>
-                    <td><?php echo !empty($exam['scheduled_date']) ? date('Y-m-d H:i', strtotime($exam['scheduled_date'])) : '-'; ?></td>
-                  </tr>
-                  <?php endforeach; ?>
-                  <?php if(count($exam_records) === 0): ?>
-                  <tr><td colspan="4" class="text-center text-muted">No exam records found yet.</td></tr>
-                  <?php endif; ?>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-4 mt-4">
-          <div class="card">
-            <h3 class="card-subtitle">Sessions Logged</h3>
-            <div class="stat-value text-primary"><?php echo intval($stats['sessions']); ?></div>
-            <div class="text-sm text-muted mt-1">Training records</div>
-          </div>
-          <div class="card">
-            <h3 class="card-subtitle">Present Sessions</h3>
-            <div class="stat-value text-success"><?php echo intval($stats['present']); ?></div>
-            <div class="text-sm text-muted mt-1">Attendance marked present</div>
-          </div>
-          <div class="card">
-            <h3 class="card-subtitle">Exam Ready Marks</h3>
-            <div class="stat-value text-warning"><?php echo intval($stats['ready']); ?></div>
-            <div class="text-sm text-muted mt-1">Instructor recommendations</div>
-          </div>
-          <div class="card">
-            <h3 class="card-subtitle">Program Status</h3>
-            <div class="stat-value text-primary"><?php echo htmlspecialchars($profile['registration_status'] ?? 'N/A'); ?></div>
-            <div class="text-sm text-muted mt-1">Student registration</div>
-          </div>
         </div>
       </main>
+      </div>
     </div>
   </body>
 </html>

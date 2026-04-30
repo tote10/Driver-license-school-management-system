@@ -8,6 +8,7 @@ if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'student'){
 }
 
 $student_id = intval($_SESSION['user_id']);
+$page_title = 'My Certificates';
 try {
     $stmt = $pdo->prepare("SELECT c.*, e.program_id FROM certificates c LEFT JOIN enrollments e ON c.enrollment_id = e.enrollment_id WHERE c.student_user_id = ? ORDER BY c.issue_date DESC");
     $stmt->execute([$student_id]);
@@ -25,16 +26,11 @@ try {
     <link rel="stylesheet" href="../assets/css/style.css?v=<?php echo time(); ?>" />
   </head>
   <body>
-    <div class="page-shell">
-      <header class="topbar" style="position: static; border-radius: 18px; margin-bottom: 20px;">
-        <div class="d-flex align-center gap-md">
-          <div>
-            <h1 class="page-title">My Certificates</h1>
-            <div class="text-sm text-muted">Download issued certificates</div>
-          </div>
-        </div>
-      </header>
-      <main class="page-content" style="padding:0; max-width:none;">
+    <div class="app-wrapper">
+      <?php include __DIR__ . '/includes/sidebar.php'; ?>
+      <div class="main-content">
+        <?php include __DIR__ . '/includes/topbar.php'; ?>
+      <main class="page-content">
         <div class="card">
           <div class="table-responsive">
             <table class="table">
@@ -54,6 +50,7 @@ try {
           </div>
         </div>
       </main>
+      </div>
     </div>
   </body>
 </html>
