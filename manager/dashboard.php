@@ -44,11 +44,14 @@ try {
     $stmt_ex->execute([$branch_id]);
     $pending_exams = $stmt_ex->fetchColumn();
 
-    $stmt_grad = $pdo->prepare("SELECT DISTINCT e.student_user_id FROM enrollments e JOIN users u ON e.student_user_id = u.user_id JOIN training_programs tp ON e.program_id = tp.program_id WHERE u.branch_id = ? AND tp.branch_id = ? AND e.approval_status = 'approved' ORDER BY u.full_name ASC");
+    $stmt_grad = $pdo->prepare("SELECT e.enrollment_id, e.student_user_id, e.program_id FROM enrollments e JOIN users u ON e.student_user_id = u.user_id JOIN training_programs tp ON e.program_id = tp.program_id WHERE u.branch_id = ? AND tp.branch_id = ? AND e.approval_status = 'approved' AND e.current_progress_status = 'enrolled' ORDER BY u.full_name ASC");
     $stmt_grad->execute([$branch_id, $branch_id]);
     $ready_graduation = 0;
     foreach ($stmt_grad->fetchAll(PDO::FETCH_ASSOC) as $row) {
-      if (manager_student_graduation_ready($pdo, intval($row['student_user_id']), $branch_id)) {
+      if (
+        manager_student_all_enrolled_programs_complete($pdo, intval($row['student_user_id']), $branch_id) &&
+        manager_student_program_complete($pdo, intval($row['student_user_id']), intval($row['program_id']))
+      ) {
         $ready_graduation++;
       }
     }

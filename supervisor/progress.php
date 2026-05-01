@@ -20,6 +20,7 @@ $progress = [];
 try {
     $stmt = $pdo->prepare(
     "SELECT s.user_id, s.full_name AS student_name, tp.name AS program_name,
+        e.current_progress_status,
         COUNT(tr.record_id) AS session_count,
         COUNT(tr.performance_score) AS scored_session_count,
         SUM(tr.performance_score) AS score_total,
@@ -34,10 +35,10 @@ try {
          LEFT JOIN training_schedules sch ON tr.schedule_id = sch.schedule_id
          WHERE s.branch_id = ?
            AND e.approval_status = 'approved'
-           AND e.current_progress_status = 'enrolled'
+           AND e.current_progress_status <> 'failed'
            AND tp.branch_id = ?
            AND (sch.branch_id = ? OR sch.branch_id IS NULL)
-         GROUP BY s.user_id, s.full_name, tp.name
+         GROUP BY s.user_id, s.full_name, tp.name, e.current_progress_status
          ORDER BY last_session DESC, s.full_name ASC"
     );
     $stmt->execute([$branch_id, $branch_id, $branch_id]);
@@ -82,6 +83,7 @@ try {
                   <tr>
                     <th>Student</th>
                     <th>Program</th>
+                    <th>Status</th>
                     <th>Sessions</th>
                     <th>Avg Score</th>
                     <th>Present</th>
@@ -94,6 +96,7 @@ try {
                   <tr>
                     <td class="font-bold"><?php echo htmlspecialchars($row['student_name']); ?></td>
                     <td><?php echo htmlspecialchars($row['program_name']); ?></td>
+                    <td><span class="badge badge-outline"><?php echo htmlspecialchars($row['current_progress_status']); ?></span></td>
                     <td><?php echo intval($row['session_count']); ?></td>
                     <td><?php echo $row['avg_score'] !== null ? number_format((float)$row['avg_score'], 2) : '-'; ?></td>
                     <td><?php echo intval($row['present_count']); ?></td>
@@ -102,7 +105,7 @@ try {
                   </tr>
                   <?php endforeach; ?>
                   <?php if(count($progress) === 0): ?>
-                  <tr><td colspan="7" class="text-center text-muted">No student progress data available yet.</td></tr>
+                  <tr><td colspan="8" class="text-center text-muted">No student progress data available yet.</td></tr>
                   <?php endif; ?>
                 </tbody>
               </table>

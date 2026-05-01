@@ -29,7 +29,7 @@ function student_badge_class($value) {
 }
 
 $profile = [];
-$active_enrollment = [];
+$active_enrollments = [];
 $assigned_instructor = [];
 $next_lesson = [];
 $recent_records = [];
@@ -54,19 +54,18 @@ $stats = [
     $profile = $stmtProfile->fetch(PDO::FETCH_ASSOC) ?: [];
 
     $stmtEnrollment = $pdo->prepare(
-        "SELECT e.enrollment_id, e.approval_status, e.current_progress_status, e.enrollment_date, e.approved_date,
+        "SELECT e.enrollment_id, e.program_id, e.approval_status, e.current_progress_status, e.enrollment_date, e.approved_date,
                 tp.name AS program_name, tp.license_category AS program_license
          FROM enrollments e
          JOIN training_programs tp ON e.program_id = tp.program_id
          WHERE e.student_user_id = ?
            AND e.approval_status = 'approved'
-           AND e.current_progress_status = 'enrolled'
+           AND e.current_progress_status IN ('enrolled','theory_training','theory_completed','practical_training','completed','graduated')
            AND tp.branch_id = ?
-         ORDER BY e.enrollment_date DESC
-         LIMIT 1"
+         ORDER BY e.enrollment_date DESC"
     );
     $stmtEnrollment->execute([$student_id, $branch_id]);
-    $active_enrollment = $stmtEnrollment->fetch(PDO::FETCH_ASSOC) ?: [];
+    $active_enrollments = $stmtEnrollment->fetchAll(PDO::FETCH_ASSOC);
 
     $stmtInstructor = $pdo->prepare(
         "SELECT ia.assignment_id, ia.assigned_date,
@@ -187,8 +186,8 @@ $stats = [
         <div class="grid grid-cols-4 mb-4">
           <div class="card">
             <h3 class="card-subtitle">Current Program</h3>
-            <div class="stat-value text-primary"><?php echo htmlspecialchars($active_enrollment['program_name'] ?? 'No active program'); ?></div>
-            <div class="text-sm text-muted mt-1">Approved enrollment</div>
+            <div class="stat-value text-primary"><?php echo count($active_enrollments) > 0 ? intval(count($active_enrollments)) : 0; ?></div>
+            <div class="text-sm text-muted mt-1">Active programs</div>
           </div>
           <div class="card">
             <h3 class="card-subtitle">My Instructor</h3>
@@ -227,10 +226,30 @@ $stats = [
 
           <div class="card">
             <h3 class="card-subtitle mb-2">Program Progress</h3>
-            <div class="text-sm text-muted"><?php echo htmlspecialchars($active_enrollment['program_name'] ?? 'No active program'); ?></div>
-            <div class="mt-2">
-              <div class="badge <?php echo student_badge_class($active_enrollment['current_progress_status'] ?? 'pending'); ?>"><?php echo htmlspecialchars($active_enrollment['current_progress_status'] ?? 'Pending'); ?></div>
-            </div>
+            <?php if(!empty($active_enrollments)): ?>
+              <div class="table-responsive">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Program</th>
+                      <th>Status</th>
+                      <th>Enrolled</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php foreach($active_enrollments as $enrollment): ?>
+                    <tr>
+                      <td class="font-bold"><?php echo htmlspecialchars($enrollment['program_name']); ?></td>
+                      <td><span class="badge <?php echo student_badge_class($enrollment['current_progress_status']); ?>"><?php echo htmlspecialchars($enrollment['current_progress_status']); ?></span></td>
+                      <td><?php echo !empty($enrollment['enrollment_date']) ? date('Y-m-d', strtotime($enrollment['enrollment_date'])) : '-'; ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            <?php else: ?>
+              <div class="text-muted">No active programs</div>
+            <?php endif; ?>
           </div>
 
         </div>

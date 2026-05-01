@@ -36,7 +36,7 @@ try {
          JOIN training_programs tp ON e.program_id = tp.program_id
          WHERE u.branch_id = ?
            AND e.approval_status = 'approved'
-           AND e.current_progress_status = 'enrolled'
+          AND e.current_progress_status <> 'failed'
            AND tp.branch_id = ?
            AND ia.assignment_id IS NULL"
     );
