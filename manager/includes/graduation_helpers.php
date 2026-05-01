@@ -56,7 +56,7 @@ function manager_student_all_enrolled_programs_complete(PDO $pdo, int $student_i
          JOIN training_programs tp ON tp.program_id = e.program_id
          WHERE e.student_user_id = ?
            AND e.approval_status = 'approved'
-           AND e.current_progress_status = 'enrolled'
+                     AND e.current_progress_status <> 'failed'
            AND tp.branch_id = ?"
     );
     $stmtPrograms->execute([$student_id, $branch_id]);
@@ -73,6 +73,42 @@ function manager_student_all_enrolled_programs_complete(PDO $pdo, int $student_i
     }
 
     return true;
+}
+
+function manager_student_has_graduation_certificate(PDO $pdo, int $student_id): bool {
+    $stmt = $pdo->prepare(
+        "SELECT certificate_id
+         FROM certificates
+         WHERE student_user_id = ?
+         LIMIT 1"
+    );
+    $stmt->execute([$student_id]);
+    return (bool)$stmt->fetchColumn();
+}
+
+function manager_student_graduation_ready(PDO $pdo, int $student_id, int $branch_id): bool {
+    if (manager_student_has_graduation_certificate($pdo, $student_id)) {
+        return false;
+    }
+
+    return manager_student_all_enrolled_programs_complete($pdo, $student_id, $branch_id);
+}
+
+function manager_latest_graduation_enrollment_id(PDO $pdo, int $student_id, int $branch_id): ?int {
+    $stmt = $pdo->prepare(
+        "SELECT e.enrollment_id
+         FROM enrollments e
+         JOIN training_programs tp ON tp.program_id = e.program_id
+         WHERE e.student_user_id = ?
+           AND e.approval_status = 'approved'
+           AND tp.branch_id = ?
+         ORDER BY e.approved_date DESC, e.enrollment_id DESC
+         LIMIT 1"
+    );
+    $stmt->execute([$student_id, $branch_id]);
+    $enrollment_id = $stmt->fetchColumn();
+
+    return $enrollment_id ? (int)$enrollment_id : null;
 }
 
 function manager_student_exam_ready(PDO $pdo, int $student_id, int $program_id): bool {

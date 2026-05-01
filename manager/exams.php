@@ -38,7 +38,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
         if($sid > 0 && $program_id > 0 && !empty($type) && !empty($date)){
             try {
           // Ensure the student is actively enrolled in the selected program
-          $stmtEnrChk = $pdo->prepare("SELECT e.enrollment_id, tp.name AS program_name FROM enrollments e JOIN users u ON e.student_user_id = u.user_id JOIN training_programs tp ON e.program_id = tp.program_id WHERE e.student_user_id = ? AND e.program_id = ? AND u.branch_id = ? AND tp.branch_id = ? AND e.approval_status = 'approved' AND e.current_progress_status = 'enrolled' LIMIT 1");
+          $stmtEnrChk = $pdo->prepare("SELECT e.enrollment_id, tp.name AS program_name FROM enrollments e JOIN users u ON e.student_user_id = u.user_id JOIN training_programs tp ON e.program_id = tp.program_id WHERE e.student_user_id = ? AND e.program_id = ? AND u.branch_id = ? AND tp.branch_id = ? AND e.approval_status = 'approved' AND e.current_progress_status IN ('enrolled','theory_training','theory_completed','practical_training') LIMIT 1");
           $stmtEnrChk->execute([$sid, $program_id, $branch_id, $branch_id]);
           $enrollmentRow = $stmtEnrChk->fetch();
           if(!$enrollmentRow) throw new Exception("Student is not enrolled in the selected program.");
@@ -96,6 +96,36 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
 
         $stmt = $pdo->prepare("UPDATE exam_records SET status = 'completed', approved_by = ? WHERE exam_id = ?");
         $stmt->execute([$manager_id, $eid]);
+
+        $stmtExam = $pdo->prepare("SELECT student_user_id, program_id, exam_type, passed FROM exam_records WHERE exam_id = ? LIMIT 1");
+        $stmtExam->execute([$eid]);
+        $approvedExam = $stmtExam->fetch(PDO::FETCH_ASSOC);
+        if ($approvedExam && !empty($approvedExam['program_id']) && intval($approvedExam['passed']) === 1) {
+          $studentId = intval($approvedExam['student_user_id']);
+          $programId = intval($approvedExam['program_id']);
+          $examType = strtolower(trim((string)$approvedExam['exam_type']));
+
+          if (manager_student_program_complete($pdo, $studentId, $programId)) {
+            $stmtProgress = $pdo->prepare(
+              "UPDATE enrollments
+               SET current_progress_status = 'completed', last_progress_update = NOW()
+               WHERE student_user_id = ?
+                 AND program_id = ?
+                 AND approval_status = 'approved'"
+            );
+            $stmtProgress->execute([$studentId, $programId]);
+          } elseif ($examType === 'theory') {
+            $stmtProgress = $pdo->prepare(
+              "UPDATE enrollments
+               SET current_progress_status = 'practical_training', last_progress_update = NOW()
+               WHERE student_user_id = ?
+                 AND program_id = ?
+                 AND approval_status = 'approved'"
+            );
+            $stmtProgress->execute([$studentId, $programId]);
+          }
+        }
+
         log_audit_action($pdo, $manager_id, 'exam_result_approved', 'exam_record', $eid, 'Approved exam result for exam ' . $eid);
             $message = "<div class='toast show'>Exam result approved!</div>";
         } catch(Exception $e) { $message = "<div class='toast show bg-danger'>Error: ".$e->getMessage()."</div>"; }
@@ -135,7 +165,7 @@ if($selected_student_id > 0){
        JOIN training_programs tp ON e.program_id = tp.program_id
        WHERE e.student_user_id = ?
          AND e.approval_status = 'approved'
-         AND e.current_progress_status = 'enrolled'
+         AND e.current_progress_status IN ('enrolled','theory_training','theory_completed','practical_training')
          AND tp.branch_id = ?
        ORDER BY tp.name ASC"
     );

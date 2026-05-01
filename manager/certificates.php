@@ -30,14 +30,14 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
     $sid = intval($_POST['student_id'] ?? 0);
     $eid = intval($_POST['enrollment_id'] ?? 0);
     
-    if($sid > 0 && $eid > 0){
+    if($sid > 0){
         try {
             $pdo->beginTransaction();
 
-        $stmtExisting = $pdo->prepare("SELECT certificate_id FROM certificates WHERE enrollment_id = ?");
-          $stmtExisting->execute([$eid]);
+        $stmtExisting = $pdo->prepare("SELECT certificate_id FROM certificates WHERE student_user_id = ? LIMIT 1");
+          $stmtExisting->execute([$sid]);
           if($stmtExisting->fetch()){
-            throw new Exception('A certificate has already been issued for this enrollment.');
+            throw new Exception('A graduation certificate has already been issued for this student.');
           }
 
         $stmtEnrollment = $pdo->prepare(
@@ -54,11 +54,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
           throw new Exception('Enrollment not found in your branch.');
         }
 
-        if(!manager_student_program_complete($pdo, $sid, intval($enrollment['program_id']))) {
-          throw new Exception('This program is not fully completed yet.');
-        }
-
-        if(!manager_student_all_enrolled_programs_complete($pdo, $sid, $branch_id)) {
+        if(!manager_student_graduation_ready($pdo, $sid, $branch_id)) {
           throw new Exception('Student must complete theory and practical exams for all enrolled programs before graduation.');
         }
             
@@ -74,14 +70,14 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
                 throw new Exception("Security: Student is not eligible or belongs to another branch.");
             }
 
-            $cert_no = "CERT-" . date('Y') . "-" . str_pad($eid, 5, '0', STR_PAD_LEFT);
+            $cert_no = "CERT-" . date('Y') . "-" . str_pad($sid, 5, '0', STR_PAD_LEFT);
             
             $stmtC = $pdo->prepare("INSERT INTO certificates (student_user_id, enrollment_id, certificate_number, issued_by) VALUES (?, ?, ?, ?)");
             $stmtC->execute([$sid, $eid, $cert_no, $manager_id]);
             $certificate_id = $pdo->lastInsertId();
             
-            $stmtE = $pdo->prepare("UPDATE enrollments SET current_progress_status = 'completed' WHERE enrollment_id = ?");
-            $stmtE->execute([$eid]);
+            $stmtE = $pdo->prepare("UPDATE enrollments SET current_progress_status = 'graduated', last_progress_update = NOW() WHERE student_user_id = ? AND approval_status = 'approved'");
+            $stmtE->execute([$sid]);
 
             log_audit_action($pdo, $manager_id, 'certificate_issued', 'certificate', $certificate_id, 'Issued certificate ' . $cert_no . ' for student ' . $sid . ' in enrollment ' . $eid);
             
@@ -133,23 +129,20 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
 $eligible = [];
 try {
     $stmt = $pdo->prepare("
-    SELECT u.user_id, u.full_name, e.enrollment_id, e.program_id, tp.name as program_name
+    SELECT u.user_id, u.full_name, MAX(e.enrollment_id) AS enrollment_id
         FROM users u
         JOIN enrollments e ON u.user_id = e.student_user_id
         JOIN training_programs tp ON e.program_id = tp.program_id
         WHERE u.branch_id = ? 
           AND e.approval_status = 'approved'
-          AND e.current_progress_status = 'enrolled'
       AND tp.branch_id = ?
-    ORDER BY u.full_name ASC, tp.name ASC
+    GROUP BY u.user_id, u.full_name
+    ORDER BY u.full_name ASC
     ");
   $stmt->execute([$branch_id, $branch_id]);
   $eligibleRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
   foreach($eligibleRows as $row){
-    if(!manager_student_all_enrolled_programs_complete($pdo, intval($row['user_id']), $branch_id)) {
-      continue;
-    }
-    if(!manager_student_program_complete($pdo, intval($row['user_id']), intval($row['program_id']))) {
+    if(!manager_student_graduation_ready($pdo, intval($row['user_id']), $branch_id)) {
       continue;
     }
     $eligible[] = $row;
@@ -211,8 +204,8 @@ try {
                   <?php foreach($eligible as $s): ?>
                   <tr>
                     <td class="font-bold"><?php echo htmlspecialchars($s['full_name']); ?></td>
-                    <td><?php echo htmlspecialchars($s['program_name']); ?></td>
-                    <td><span class="badge badge-success">PASSED ALL EXAMS</span></td>
+                    <td>All enrolled programs</td>
+                    <td><span class="badge badge-success">READY FOR GRADUATION</span></td>
                     <td>
                       <form method="POST" style="margin:0; display:flex; gap:8px; flex-wrap:wrap;">
                         <input type="hidden" name="student_id" value="<?php echo $s['user_id']; ?>">

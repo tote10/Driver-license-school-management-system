@@ -106,11 +106,11 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
         if($chk->fetch()){
           $message = "<div class='toast show bg-danger'>Student is already enrolled in this program!</div>";
         } else {
-          // Block if student already graduated (certificate exists for this program)
-          $chkCert = $pdo->prepare("SELECT c.certificate_id FROM certificates c JOIN enrollments e ON c.enrollment_id = e.enrollment_id WHERE c.student_user_id = ? AND e.program_id = ?");
-          $chkCert->execute([$student_id, $program_id]);
+          // Block if student already graduated
+          $chkCert = $pdo->prepare("SELECT certificate_id FROM certificates WHERE student_user_id = ? LIMIT 1");
+          $chkCert->execute([$student_id]);
           if($chkCert->fetch()){
-            $message = "<div class='toast show bg-danger'>Student has already completed this program and holds a certificate.</div>";
+            $message = "<div class='toast show bg-danger'>Student has already graduated and cannot be enrolled again.</div>";
           } else {
             $stmt = $pdo->prepare("INSERT INTO enrollments (student_user_id, program_id, approval_status, approved_by, approved_date, current_progress_status) VALUES (?, ?, 'approved', ?, NOW(), 'enrolled')");
             $stmt->execute([$student_id, $program_id, $_SESSION['user_id']]);
