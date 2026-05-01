@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/includes/graduation_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
@@ -9,6 +10,16 @@ if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
 
 $branch_id = $_SESSION['branch_id'];
 $full_name = $_SESSION['full_name'] ?? 'Manager';
+$pending_enrolls = 0;
+$pending_exams = 0;
+$ready_graduation = 0;
+$total_students = 0;
+$total_instructors = 0;
+$exam_stats = ['total' => 0, 'passes' => 0];
+$pass_rate = 0;
+$reg_target_pct = 0;
+$total_revenue = 0;
+$revenue_target_pct = 0;
 
 // Initials for avatar
 $name_parts = explode(' ', trim($full_name));
@@ -33,15 +44,17 @@ try {
     $stmt_ex->execute([$branch_id]);
     $pending_exams = $stmt_ex->fetchColumn();
 
-    $stmt_grad = $pdo->prepare("
-        SELECT COUNT(*) FROM enrollments e 
-        JOIN users u ON e.student_user_id = u.user_id 
-        WHERE u.branch_id = ? AND e.approval_status = 'approved' AND e.current_progress_status = 'enrolled'
-        AND (SELECT COUNT(*) FROM exam_records WHERE student_user_id = u.user_id AND exam_type = 'theory' AND passed = 1 AND status = 'completed') > 0
-        AND (SELECT COUNT(*) FROM exam_records WHERE student_user_id = u.user_id AND exam_type = 'practical' AND passed = 1 AND status = 'completed') > 0
-    ");
-    $stmt_grad->execute([$branch_id]);
-    $ready_graduation = $stmt_grad->fetchColumn();
+    $stmt_grad = $pdo->prepare("SELECT e.enrollment_id, e.student_user_id, e.program_id FROM enrollments e JOIN users u ON e.student_user_id = u.user_id JOIN training_programs tp ON e.program_id = tp.program_id WHERE u.branch_id = ? AND tp.branch_id = ? AND e.approval_status = 'approved' AND e.current_progress_status = 'enrolled' ORDER BY u.full_name ASC");
+    $stmt_grad->execute([$branch_id, $branch_id]);
+    $ready_graduation = 0;
+    foreach ($stmt_grad->fetchAll(PDO::FETCH_ASSOC) as $row) {
+      if (
+        manager_student_all_enrolled_programs_complete($pdo, intval($row['student_user_id']), $branch_id) &&
+        manager_student_program_complete($pdo, intval($row['student_user_id']), intval($row['program_id']))
+      ) {
+        $ready_graduation++;
+      }
+    }
 
     // 2. Stats
     $stmt_s = $pdo->prepare("SELECT COUNT(*) FROM users WHERE role='student' AND branch_id=? AND status='active'");

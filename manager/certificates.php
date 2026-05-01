@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/includes/graduation_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
@@ -33,25 +34,43 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
         try {
             $pdo->beginTransaction();
 
-          $stmtExisting = $pdo->prepare("SELECT certificate_id FROM certificates WHERE enrollment_id = ?");
+        $stmtExisting = $pdo->prepare("SELECT certificate_id FROM certificates WHERE enrollment_id = ?");
           $stmtExisting->execute([$eid]);
           if($stmtExisting->fetch()){
             throw new Exception('A certificate has already been issued for this enrollment.');
           }
+
+        $stmtEnrollment = $pdo->prepare(
+          "SELECT e.enrollment_id, e.student_user_id, e.program_id, tp.name AS program_name
+           FROM enrollments e
+           JOIN training_programs tp ON e.program_id = tp.program_id
+           JOIN users u ON e.student_user_id = u.user_id
+           WHERE e.enrollment_id = ? AND e.student_user_id = ? AND u.branch_id = ? AND tp.branch_id = ?
+           LIMIT 1"
+        );
+        $stmtEnrollment->execute([$eid, $sid, $branch_id, $branch_id]);
+        $enrollment = $stmtEnrollment->fetch(PDO::FETCH_ASSOC);
+        if(!$enrollment) {
+          throw new Exception('Enrollment not found in your branch.');
+        }
+
+        if(!manager_student_program_complete($pdo, $sid, intval($enrollment['program_id']))) {
+          throw new Exception('This program is not fully completed yet.');
+        }
+
+        if(!manager_student_all_enrolled_programs_complete($pdo, $sid, $branch_id)) {
+          throw new Exception('Student must complete theory and practical exams for all enrolled programs before graduation.');
+        }
             
             $stmtV = $pdo->prepare("
-                SELECT u.branch_id 
-                FROM users u
-                JOIN enrollments e ON u.user_id = e.student_user_id
-                WHERE u.user_id = ? AND e.enrollment_id = ?
-                  AND e.approval_status = 'approved'
-                  AND (SELECT COUNT(*) FROM exam_records WHERE student_user_id = u.user_id AND exam_type = 'theory' AND passed = 1 AND status = 'completed') > 0
-                  AND (SELECT COUNT(*) FROM exam_records WHERE student_user_id = u.user_id AND exam_type = 'practical' AND passed = 1 AND status = 'completed') > 0
+          SELECT u.branch_id
+          FROM users u
+          WHERE u.user_id = ? AND u.branch_id = ?
             ");
-            $stmtV->execute([$sid, $eid]);
+        $stmtV->execute([$sid, $branch_id]);
             $res = $stmtV->fetch();
 
-            if(!$res || $res['branch_id'] != $branch_id){
+        if(!$res){
                 throw new Exception("Security: Student is not eligible or belongs to another branch.");
             }
 
@@ -114,18 +133,27 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
 $eligible = [];
 try {
     $stmt = $pdo->prepare("
-        SELECT u.user_id, u.full_name, e.enrollment_id, tp.name as program_name
+    SELECT u.user_id, u.full_name, e.enrollment_id, e.program_id, tp.name as program_name
         FROM users u
         JOIN enrollments e ON u.user_id = e.student_user_id
         JOIN training_programs tp ON e.program_id = tp.program_id
         WHERE u.branch_id = ? 
           AND e.approval_status = 'approved'
           AND e.current_progress_status = 'enrolled'
-          AND (SELECT COUNT(*) FROM exam_records WHERE student_user_id = u.user_id AND exam_type = 'theory' AND passed = 1 AND status = 'completed') > 0
-          AND (SELECT COUNT(*) FROM exam_records WHERE student_user_id = u.user_id AND exam_type = 'practical' AND passed = 1 AND status = 'completed') > 0
+      AND tp.branch_id = ?
+    ORDER BY u.full_name ASC, tp.name ASC
     ");
-    $stmt->execute([$branch_id]);
-    $eligible = $stmt->fetchAll();
+  $stmt->execute([$branch_id, $branch_id]);
+  $eligibleRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  foreach($eligibleRows as $row){
+    if(!manager_student_all_enrolled_programs_complete($pdo, intval($row['user_id']), $branch_id)) {
+      continue;
+    }
+    if(!manager_student_program_complete($pdo, intval($row['user_id']), intval($row['program_id']))) {
+      continue;
+    }
+    $eligible[] = $row;
+  }
 } catch(PDOException $e) {}
 
 $issued = [];

@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/includes/graduation_helpers.php';
 
 if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'manager'){
     header('Location: ../login.php');
@@ -47,6 +48,7 @@ function log_audit_action($pdo, $user_id, $action_type, $entity_type, $entity_id
 $schedule_message = '';
 $students = [];
 $selected_student = null;
+$student_programs = [];
 $eligible_instructors = [];
 $schedules = [];
 $stats = [
@@ -55,17 +57,19 @@ $stats = [
     'completed' => 0,
     'cancelled' => 0,
 ];
+  $schedule_has_program_column = manager_table_has_column($pdo, 'training_schedules', 'program_id');
 
 if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_schedule') {
     $student_id = intval($_POST['student_id'] ?? 0);
     $instructor_id = intval($_POST['instructor_id'] ?? 0);
+  $program_id = intval($_POST['program_id'] ?? 0);
     $lesson_type = trim((string)($_POST['lesson_type'] ?? ''));
     $scheduled_datetime = trim((string)($_POST['scheduled_datetime'] ?? ''));
     $duration_minutes = intval($_POST['duration_minutes'] ?? 60);
     $location = trim((string)($_POST['location'] ?? ''));
 
     try {
-        if($student_id <= 0 || $instructor_id <= 0 || $lesson_type === '' || $scheduled_datetime === '') {
+        if($student_id <= 0 || $instructor_id <= 0 || $program_id <= 0 || $lesson_type === '' || $scheduled_datetime === '') {
             throw new Exception('Fill all required fields.');
         }
         if(!in_array($lesson_type, ['theory', 'practical'], true)) {
@@ -110,6 +114,23 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create
             throw new Exception('Instructor not found in your branch or not active.');
         }
 
+        $stmtProgram = $pdo->prepare(
+          "SELECT e.enrollment_id, tp.name AS program_name
+           FROM enrollments e
+           JOIN training_programs tp ON tp.program_id = e.program_id
+           WHERE e.student_user_id = ?
+             AND e.program_id = ?
+             AND e.approval_status = 'approved'
+             AND e.current_progress_status = 'enrolled'
+             AND tp.branch_id = ?
+           LIMIT 1"
+        );
+        $stmtProgram->execute([$student_id, $program_id, $branch_id]);
+        $enrollment_program = $stmtProgram->fetch(PDO::FETCH_ASSOC);
+        if(!$enrollment_program) {
+          throw new Exception('Selected program is not active for this student.');
+        }
+
         $stmtAssignment = $pdo->prepare(
             "SELECT assignment_id FROM instructor_assignments WHERE student_user_id = ? AND instructor_user_id = ? AND status = 'active' LIMIT 1"
         );
@@ -118,23 +139,40 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create
             throw new Exception('Instructor is not assigned to this student.');
         }
 
-        $stmtDuplicate = $pdo->prepare(
+        if ($schedule_has_program_column) {
+          $stmtDuplicate = $pdo->prepare(
+            "SELECT schedule_id FROM training_schedules
+             WHERE student_user_id = ? AND instructor_user_id = ? AND program_id = ? AND lesson_type = ? AND scheduled_datetime = ? AND status = 'scheduled'
+             LIMIT 1"
+          );
+          $stmtDuplicate->execute([$student_id, $instructor_id, $program_id, $lesson_type, $scheduled_datetime]);
+        } else {
+          $stmtDuplicate = $pdo->prepare(
             "SELECT schedule_id FROM training_schedules
              WHERE student_user_id = ? AND instructor_user_id = ? AND lesson_type = ? AND scheduled_datetime = ? AND status = 'scheduled'
              LIMIT 1"
-        );
-        $stmtDuplicate->execute([$student_id, $instructor_id, $lesson_type, $scheduled_datetime]);
+          );
+          $stmtDuplicate->execute([$student_id, $instructor_id, $lesson_type, $scheduled_datetime]);
+        }
         if($stmtDuplicate->fetchColumn()) {
             throw new Exception('This lesson is already scheduled at that time.');
         }
 
-        $stmtInsert = $pdo->prepare(
+        if ($schedule_has_program_column) {
+          $stmtInsert = $pdo->prepare(
+            "INSERT INTO training_schedules (student_user_id, instructor_user_id, program_id, lesson_type, scheduled_datetime, duration_minutes, location, branch_id, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')"
+          );
+          $stmtInsert->execute([$student_id, $instructor_id, $program_id, $lesson_type, $scheduled_datetime, $duration_minutes, $location, $branch_id]);
+        } else {
+          $stmtInsert = $pdo->prepare(
             "INSERT INTO training_schedules (student_user_id, instructor_user_id, lesson_type, scheduled_datetime, duration_minutes, location, branch_id, status)
              VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled')"
-        );
-        $stmtInsert->execute([$student_id, $instructor_id, $lesson_type, $scheduled_datetime, $duration_minutes, $location, $branch_id]);
+          );
+          $stmtInsert->execute([$student_id, $instructor_id, $lesson_type, $scheduled_datetime, $duration_minutes, $location, $branch_id]);
+        }
         $schedule_id = intval($pdo->lastInsertId());
-        log_audit_action($pdo, $manager_id, 'lesson_schedule_created', 'training_schedule', $schedule_id, 'Scheduled ' . $lesson_type . ' lesson for student ' . $selected_student['full_name']);
+        log_audit_action($pdo, $manager_id, 'lesson_schedule_created', 'training_schedule', $schedule_id, 'Scheduled ' . $lesson_type . ' lesson for student ' . $selected_student['full_name'] . ' in program ' . $enrollment_program['program_name']);
         $schedule_message = "<div class='toast show'>Lesson scheduled successfully.</div>";
         $selected_student_id = $student_id;
     } catch(Exception $e) {
@@ -167,6 +205,19 @@ try {
     $students = $stmtStudents->fetchAll(PDO::FETCH_ASSOC);
 
     if($selected_student_id > 0) {
+        $stmtPrograms = $pdo->prepare(
+            "SELECT e.program_id, tp.name, tp.license_category
+             FROM enrollments e
+             JOIN training_programs tp ON e.program_id = tp.program_id
+             WHERE e.student_user_id = ?
+               AND e.approval_status = 'approved'
+               AND e.current_progress_status = 'enrolled'
+               AND tp.branch_id = ?
+             ORDER BY tp.name ASC"
+        );
+        $stmtPrograms->execute([$selected_student_id, $branch_id]);
+        $student_programs = $stmtPrograms->fetchAll(PDO::FETCH_ASSOC);
+
         $stmtSelected = $pdo->prepare(
             "SELECT s.user_id, s.full_name,
                     tp.name AS program_name,
@@ -214,18 +265,9 @@ try {
         $eligible_instructors = $stmtAssignments->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    $stmtSchedules = $pdo->prepare(
-        "SELECT sch.schedule_id, sch.lesson_type, sch.scheduled_datetime, sch.duration_minutes, sch.location, sch.status,
-                s.full_name AS student_name, i.full_name AS instructor_name, tp.name AS program_name
-         FROM training_schedules sch
-         JOIN users s ON sch.student_user_id = s.user_id
-         JOIN users i ON sch.instructor_user_id = i.user_id
-         LEFT JOIN enrollments e ON e.student_user_id = s.user_id AND e.approval_status = 'approved' AND e.current_progress_status = 'enrolled'
-         LEFT JOIN training_programs tp ON tp.program_id = e.program_id
-         WHERE sch.branch_id = ?
-         ORDER BY sch.scheduled_datetime DESC
-         LIMIT 50"
-    );
+    $stmtSchedules = $schedule_has_program_column
+      ? $pdo->prepare("SELECT sch.schedule_id, sch.lesson_type, sch.scheduled_datetime, sch.duration_minutes, sch.location, sch.status, s.full_name AS student_name, i.full_name AS instructor_name, tp.name AS program_name FROM training_schedules sch JOIN users s ON sch.student_user_id = s.user_id JOIN users i ON sch.instructor_user_id = i.user_id LEFT JOIN training_programs tp ON tp.program_id = sch.program_id WHERE sch.branch_id = ? ORDER BY sch.scheduled_datetime DESC LIMIT 50")
+      : $pdo->prepare("SELECT sch.schedule_id, sch.lesson_type, sch.scheduled_datetime, sch.duration_minutes, sch.location, sch.status, s.full_name AS student_name, i.full_name AS instructor_name, tp.name AS program_name FROM training_schedules sch JOIN users s ON sch.student_user_id = s.user_id JOIN users i ON sch.instructor_user_id = i.user_id LEFT JOIN enrollments e ON e.student_user_id = sch.student_user_id AND e.approval_status = 'approved' AND e.current_progress_status = 'enrolled' LEFT JOIN training_programs tp ON tp.program_id = e.program_id WHERE sch.branch_id = ? ORDER BY sch.scheduled_datetime DESC LIMIT 50");
     $stmtSchedules->execute([$branch_id]);
     $schedules = $stmtSchedules->fetchAll(PDO::FETCH_ASSOC);
 
@@ -291,19 +333,11 @@ try {
               </div>
             </form>
 
+            <?php if($selected_student): ?>
+            <div class="mb-2 text-sm text-muted">Selected student: <span class="font-bold"><?php echo htmlspecialchars($selected_student['full_name']); ?></span></div>
             <form method="POST" class="grid grid-cols-2 gap-md align-end">
               <input type="hidden" name="action" value="create_schedule">
-              <div class="form-group">
-                <label class="form-label">Student</label>
-                <select name="student_id" class="form-control" required>
-                  <option value="">-- Choose Student --</option>
-                  <?php foreach($students as $student): ?>
-                    <option value="<?php echo intval($student['user_id']); ?>" <?php echo $selected_student_id === intval($student['user_id']) ? 'selected' : ''; ?>>
-                      <?php echo htmlspecialchars($student['full_name']); ?> (<?php echo htmlspecialchars($student['program_name']); ?>)
-                    </option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
+              <input type="hidden" name="student_id" value="<?php echo intval($selected_student_id); ?>">
               <div class="form-group">
                 <label class="form-label">Instructor</label>
                 <select name="instructor_id" class="form-control" required>
@@ -316,6 +350,18 @@ try {
                   <?php endforeach; ?>
                 </select>
                 <small class="text-muted">Only instructors assigned to the selected student are shown when a student filter is active.</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Program</label>
+                <select name="program_id" class="form-control" required>
+                  <option value="">-- Choose Program --</option>
+                  <?php foreach($student_programs as $program): ?>
+                    <option value="<?php echo intval($program['program_id']); ?>">
+                      <?php echo htmlspecialchars($program['name']); ?> (<?php echo htmlspecialchars($program['license_category']); ?>)
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+                <small class="text-muted">Pick the exact program this lesson belongs to.</small>
               </div>
               <div class="form-group">
                 <label class="form-label">Lesson Type</label>
@@ -340,6 +386,9 @@ try {
                 <button type="submit" class="btn btn-primary">Create Schedule</button>
               </div>
             </form>
+            <?php else: ?>
+              <div class="text-sm text-muted">Select a student above to load their enrolled programs and assigned instructors.</div>
+            <?php endif; ?>
           </div>
 
           <div class="card">

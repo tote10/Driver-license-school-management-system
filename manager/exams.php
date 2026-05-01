@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/includes/graduation_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
@@ -42,20 +43,24 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
           $enrollmentRow = $stmtEnrChk->fetch();
           if(!$enrollmentRow) throw new Exception("Student is not enrolled in the selected program.");
 
+            if (!manager_student_exam_ready($pdo, $sid, $program_id)) {
+              throw new Exception("Student must be recommended by the instructor and approved by the supervisor before scheduling exams.");
+            }
+
                 // Duplicate check
-                $stmtD = $pdo->prepare("SELECT COUNT(*) FROM exam_records WHERE student_user_id = ? AND exam_type = ? AND status IN ('scheduled','pending_approval')");
-                $stmtD->execute([$sid, $type]);
+              $stmtD = $pdo->prepare("SELECT COUNT(*) FROM exam_records WHERE student_user_id = ? AND program_id = ? AND exam_type = ? AND status IN ('scheduled','pending_approval')");
+              $stmtD->execute([$sid, $program_id, $type]);
                 if($stmtD->fetchColumn() > 0) throw new Exception("Student already has an active $type exam.");
 
                 // Theory-first prerequisite
                 if ($type == 'practical') {
-                    $stmtC = $pdo->prepare("SELECT COUNT(*) FROM exam_records WHERE student_user_id = ? AND exam_type = 'theory' AND passed = 1 AND status = 'completed'");
-                    $stmtC->execute([$sid]);
+                  $stmtC = $pdo->prepare("SELECT COUNT(*) FROM exam_records WHERE student_user_id = ? AND program_id = ? AND exam_type = 'theory' AND passed = 1 AND status = 'completed'");
+                  $stmtC->execute([$sid, $program_id]);
                     if ($stmtC->fetchColumn() == 0) throw new Exception("Student must pass the Theory exam before scheduling Practical.");
                 }
 
-                $stmt = $pdo->prepare("INSERT INTO exam_records (student_user_id, exam_type, scheduled_date, status) VALUES (?, ?, ?, 'scheduled')");
-                $stmt->execute([$sid, $type, $date]);
+              $stmt = $pdo->prepare("INSERT INTO exam_records (student_user_id, program_id, exam_type, scheduled_date, status) VALUES (?, ?, ?, ?, 'scheduled')");
+              $stmt->execute([$sid, $program_id, $type, $date]);
                 log_audit_action($pdo, $manager_id, 'exam_scheduled', 'exam_record', intval($pdo->lastInsertId()), 'Scheduled ' . $type . ' exam for student ' . $sid . ' in program ' . $program_id);
                 $message = "<div class='toast show'>Exam scheduled successfully!</div>";
             } catch(Exception $e) { $message = "<div class='toast show bg-danger'>Error: ".$e->getMessage()."</div>"; }
@@ -139,11 +144,13 @@ if($selected_student_id > 0){
   }
 }
 
-$exams = $pdo->prepare("SELECT er.*, u.full_name FROM exam_records er JOIN users u ON er.student_user_id = u.user_id WHERE u.branch_id = ? AND er.status = 'scheduled' ORDER BY er.scheduled_date ASC");
+$examsSql = "SELECT er.*, u.full_name, tp.name AS program_name FROM exam_records er JOIN users u ON er.student_user_id = u.user_id LEFT JOIN training_programs tp ON er.program_id = tp.program_id WHERE u.branch_id = ? AND er.status = 'scheduled' ORDER BY er.scheduled_date ASC";
+$exams = $pdo->prepare($examsSql);
 $exams->execute([$branch_id]);
 $exams = $exams->fetchAll();
 
-$pending = $pdo->prepare("SELECT er.*, u.full_name FROM exam_records er JOIN users u ON er.student_user_id = u.user_id WHERE u.branch_id = ? AND er.status = 'pending_approval'");
+$pendingSql = "SELECT er.*, u.full_name, tp.name AS program_name FROM exam_records er JOIN users u ON er.student_user_id = u.user_id LEFT JOIN training_programs tp ON er.program_id = tp.program_id WHERE u.branch_id = ? AND er.status = 'pending_approval'";
+$pending = $pdo->prepare($pendingSql);
 $pending->execute([$branch_id]);
 $pending = $pending->fetchAll();
 
@@ -236,6 +243,7 @@ $pending = $pending->fetchAll();
                       <td class="font-bold"><?php echo htmlspecialchars($ex['full_name']); ?></td>
                       <td>
                           <span class="badge badge-primary"><?php echo strtoupper($ex['exam_type']); ?></span><br>
+                          <small class="text-muted"><?php echo htmlspecialchars($ex['program_name'] ?? 'Program N/A'); ?></small><br>
                           <small class="text-muted"><?php echo date('M d, H:i', strtotime($ex['scheduled_date'])); ?></small>
                       </td>
                       <td>
@@ -273,6 +281,7 @@ $pending = $pending->fetchAll();
                     <tr>
                       <td class="font-bold"><?php echo htmlspecialchars($p['full_name']); ?></td>
                       <td>
+                          <div class="text-sm text-muted"><?php echo htmlspecialchars($p['program_name'] ?? 'Program N/A'); ?></div>
                           <span class="badge <?php echo $p['passed'] ? 'badge-success' : 'badge-danger'; ?>">
                               <?php echo $p['passed'] ? 'PASS' : 'FAIL'; ?> (<?php echo $p['score']; ?>)
                           </span>

@@ -33,3 +33,23 @@ function instructor_is_active_assignment(PDO $pdo, int $instructorId, int $stude
     $stmt->execute([$instructorId, $studentId]);
     return (bool)$stmt->fetchColumn();
 }
+
+function instructor_table_has_column(PDO $pdo, string $table, string $column): bool {
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    $stmt = $pdo->prepare(
+        "SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = DATABASE()
+           AND table_name = ?
+           AND column_name = ?
+         LIMIT 1"
+    );
+    $stmt->execute([$table, $column]);
+    $cache[$key] = (bool)$stmt->fetchColumn();
+    return $cache[$key];
+}

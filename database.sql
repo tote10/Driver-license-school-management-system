@@ -108,6 +108,7 @@ CREATE TABLE training_schedules (
     schedule_id INT AUTO_INCREMENT PRIMARY KEY,
     student_user_id INT,
     instructor_user_id INT,
+    program_id INT,
     lesson_type VARCHAR(20),
     scheduled_datetime DATETIME,
     duration_minutes INT DEFAULT 60,
@@ -116,8 +117,10 @@ CREATE TABLE training_schedules (
     status VARCHAR(30) DEFAULT 'scheduled',
     FOREIGN KEY (student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
     FOREIGN KEY (instructor_user_id) REFERENCES instructors(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (program_id) REFERENCES training_programs(program_id) ON DELETE SET NULL,
     FOREIGN KEY (branch_id) REFERENCES branches(branch_id) ON DELETE SET NULL,
     INDEX idx_sch_student (student_user_id),
+    INDEX idx_sch_program (program_id),
     INDEX idx_sch_date (scheduled_datetime)
 );
 
@@ -126,6 +129,7 @@ CREATE TABLE training_records (
     schedule_id INT,
     student_user_id INT,
     instructor_user_id INT,
+    program_id INT,
     lesson_type VARCHAR(20),
     performance_score DECIMAL(5,2),
     feedback TEXT,
@@ -137,9 +141,11 @@ CREATE TABLE training_records (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (schedule_id) REFERENCES training_schedules(schedule_id) ON DELETE SET NULL,
     FOREIGN KEY (student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (program_id) REFERENCES training_programs(program_id) ON DELETE SET NULL,
     FOREIGN KEY (recorded_by) REFERENCES users(user_id) ON DELETE SET NULL,
     FOREIGN KEY (reviewed_by) REFERENCES users(user_id) ON DELETE SET NULL,
     INDEX idx_rec_student (student_user_id),
+    INDEX idx_rec_program (program_id),
     INDEX idx_rec_review (reviewed_by)
 );
 
@@ -159,6 +165,7 @@ CREATE TABLE documents (
 CREATE TABLE exam_records (
     exam_id INT AUTO_INCREMENT PRIMARY KEY,
     student_user_id INT,
+    program_id INT,
     exam_type VARCHAR(20),
     prerequisite_exam_id INT,
     scheduled_date DATETIME,
@@ -171,10 +178,12 @@ CREATE TABLE exam_records (
     approved_by INT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (student_user_id) REFERENCES students(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (program_id) REFERENCES training_programs(program_id) ON DELETE SET NULL,
     FOREIGN KEY (approved_by) REFERENCES users(user_id) ON DELETE SET NULL,
     FOREIGN KEY (recorded_by) REFERENCES users(user_id) ON DELETE SET NULL,
     FOREIGN KEY (prerequisite_exam_id) REFERENCES exam_records(exam_id) ON DELETE SET NULL,
     INDEX idx_ex_student (student_user_id),
+    INDEX idx_ex_program (program_id),
     INDEX idx_ex_status (status)
 );
 

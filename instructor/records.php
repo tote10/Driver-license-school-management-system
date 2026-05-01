@@ -6,13 +6,30 @@ $message = '';
 $selected_student_id = intval($_GET['student_id'] ?? 0);
 $students = [];
 $selected_student = [];
+$student_programs = [];
 $student_schedules = [];
 $recent_records = [];
+
+function instructor_program_name_by_id(PDO $pdo, int $program_id): string {
+  static $cache = [];
+  if ($program_id <= 0) {
+    return '-';
+  }
+  if (isset($cache[$program_id])) {
+    return $cache[$program_id];
+  }
+  $stmt = $pdo->prepare("SELECT name FROM training_programs WHERE program_id = ? LIMIT 1");
+  $stmt->execute([$program_id]);
+  $name = (string)($stmt->fetchColumn() ?: '-');
+  $cache[$program_id] = $name;
+  return $name;
+}
 
 if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_record') {
     $student_id = intval($_POST['student_id'] ?? 0);
     $schedule_id = intval($_POST['schedule_id'] ?? 0);
     $lesson_type = trim((string)($_POST['lesson_type'] ?? ''));
+  $program_id = intval($_POST['program_id'] ?? 0);
     $attendance_status = trim((string)($_POST['attendance_status'] ?? 'present'));
     $performance_score = trim((string)($_POST['performance_score'] ?? ''));
     $feedback = trim((string)($_POST['feedback'] ?? ''));
@@ -27,6 +44,26 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_r
         }
         if(!in_array($lesson_type, ['theory', 'practical'], true)) {
             throw new Exception('Select a valid lesson type.');
+        }
+
+        $stmtProgramChoices = $pdo->prepare(
+          "SELECT e.program_id, tp.name, tp.license_category
+           FROM enrollments e
+           JOIN training_programs tp ON tp.program_id = e.program_id
+           WHERE e.student_user_id = ?
+             AND e.approval_status = 'approved'
+             AND e.current_progress_status = 'enrolled'
+             AND tp.branch_id = ?
+           ORDER BY e.enrollment_date DESC, tp.name ASC"
+        );
+        $stmtProgramChoices->execute([$student_id, $branch_id]);
+        $available_programs = $stmtProgramChoices->fetchAll(PDO::FETCH_ASSOC);
+
+        if($program_id <= 0 && !empty($available_programs)) {
+          $program_id = intval($available_programs[0]['program_id']);
+        }
+        if($program_id <= 0) {
+          throw new Exception('Select a program for this training record.');
         }
 
         $stmtStudent = $pdo->prepare(
@@ -44,16 +81,41 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_r
             throw new Exception('Student is not assigned to you.');
         }
 
+        if($program_id > 0) {
+          $programAllowed = false;
+          foreach($available_programs as $program) {
+            if(intval($program['program_id']) === $program_id) {
+              $programAllowed = true;
+              break;
+            }
+          }
+          if(!$programAllowed) {
+            throw new Exception('Selected program is not active for this student.');
+          }
+        }
+
         $schedule = null;
         if($schedule_id > 0) {
-            $stmtSchedule = $pdo->prepare(
-                "SELECT sch.schedule_id, sch.lesson_type, sch.status, sch.student_user_id, sch.instructor_user_id
-                 FROM training_schedules sch
-                 JOIN users s ON sch.student_user_id = s.user_id
-                 WHERE sch.schedule_id = ?
-                   AND sch.instructor_user_id = ?
-                   AND s.branch_id = ?"
-            );
+            $stmtSchedule = instructor_table_has_column($pdo, 'training_schedules', 'program_id')
+                ? $pdo->prepare(
+                    "SELECT sch.schedule_id, sch.lesson_type, sch.status, sch.student_user_id, sch.instructor_user_id, sch.program_id, tp.name AS program_name
+                     FROM training_schedules sch
+                     JOIN users s ON sch.student_user_id = s.user_id
+                     LEFT JOIN training_programs tp ON tp.program_id = sch.program_id
+                     WHERE sch.schedule_id = ?
+                       AND sch.instructor_user_id = ?
+                       AND s.branch_id = ?"
+                )
+                : $pdo->prepare(
+                    "SELECT sch.schedule_id, sch.lesson_type, sch.status, sch.student_user_id, sch.instructor_user_id, tp.name AS program_name
+                     FROM training_schedules sch
+                     JOIN users s ON sch.student_user_id = s.user_id
+                     LEFT JOIN enrollments e ON e.student_user_id = sch.student_user_id AND e.approval_status = 'approved' AND e.current_progress_status = 'enrolled'
+                     LEFT JOIN training_programs tp ON tp.program_id = e.program_id
+                     WHERE sch.schedule_id = ?
+                       AND sch.instructor_user_id = ?
+                       AND s.branch_id = ?"
+                );
             $stmtSchedule->execute([$schedule_id, $instructor_id, $branch_id]);
             $schedule = $stmtSchedule->fetch(PDO::FETCH_ASSOC);
             if(!$schedule) {
@@ -66,6 +128,10 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_r
                 $lesson_type = $schedule['lesson_type'];
             }
 
+            if($program_id <= 0 && !empty($schedule['program_id'])) {
+              $program_id = intval($schedule['program_id']);
+            }
+
             $stmtRecordCheck = $pdo->prepare("SELECT record_id FROM training_records WHERE schedule_id = ? LIMIT 1");
             $stmtRecordCheck->execute([$schedule_id]);
             if($stmtRecordCheck->fetchColumn()) {
@@ -75,19 +141,20 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_r
 
         $scoreValue = $performance_score === '' ? null : (float)$performance_score;
         $stmtInsert = $pdo->prepare(
-            "INSERT INTO training_records (schedule_id, student_user_id, instructor_user_id, lesson_type, performance_score, feedback, attendance_status, instructor_recommendation_for_exam, recorded_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO training_records (schedule_id, student_user_id, instructor_user_id, program_id, lesson_type, performance_score, feedback, attendance_status, instructor_recommendation_for_exam, recorded_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $stmtInsert->execute([
-            $schedule_id > 0 ? $schedule_id : null,
-            $student_id,
-            $instructor_id,
-            $lesson_type,
-            $scoreValue,
-            $feedback,
-            $attendance_status,
-            $recommend_exam,
-            $instructor_id,
+          $schedule_id > 0 ? $schedule_id : null,
+          $student_id,
+          $instructor_id,
+          $program_id,
+          $lesson_type,
+          $scoreValue,
+          $feedback,
+          $attendance_status,
+          $recommend_exam,
+          $instructor_id,
         ]);
 
         if($schedule_id > 0) {
@@ -128,6 +195,19 @@ try {
     $students = $stmtStudents->fetchAll(PDO::FETCH_ASSOC);
 
     if($selected_student_id > 0) {
+        $stmtPrograms = $pdo->prepare(
+            "SELECT e.program_id, tp.name, tp.license_category
+             FROM enrollments e
+             JOIN training_programs tp ON tp.program_id = e.program_id
+             WHERE e.student_user_id = ?
+               AND e.approval_status = 'approved'
+               AND e.current_progress_status = 'enrolled'
+               AND tp.branch_id = ?
+             ORDER BY e.enrollment_date DESC, tp.name ASC"
+        );
+        $stmtPrograms->execute([$selected_student_id, $branch_id]);
+        $student_programs = $stmtPrograms->fetchAll(PDO::FETCH_ASSOC);
+
         $stmtSelected = $pdo->prepare(
             "SELECT s.user_id AS student_id, s.full_name AS student_name,
                     st.license_category,
@@ -151,9 +231,9 @@ try {
 
         if($selected_student) {
             $stmtSchedules = $pdo->prepare(
-                "SELECT schedule_id, lesson_type, scheduled_datetime, duration_minutes, location, status
+            "SELECT schedule_id, lesson_type, scheduled_datetime, duration_minutes, location, status
                  FROM training_schedules
-                 WHERE student_user_id = ? AND instructor_user_id = ? AND branch_id = ?
+             WHERE student_user_id = ? AND instructor_user_id = ? AND branch_id = ? AND status = 'scheduled'
                  ORDER BY scheduled_datetime DESC"
             );
             $stmtSchedules->execute([$selected_student_id, $instructor_id, $branch_id]);
@@ -161,16 +241,7 @@ try {
         }
     }
 
-    $stmtRecent = $pdo->prepare(
-        "SELECT tr.record_id, tr.created_at, tr.lesson_type, tr.performance_score, tr.attendance_status,
-                tr.instructor_recommendation_for_exam, tr.feedback,
-                s.full_name AS student_name
-         FROM training_records tr
-         JOIN users s ON tr.student_user_id = s.user_id
-         WHERE tr.instructor_user_id = ?
-         ORDER BY tr.created_at DESC
-         LIMIT 12"
-    );
+        $stmtRecent = $pdo->prepare("SELECT tr.record_id, tr.created_at, tr.lesson_type, tr.performance_score, tr.attendance_status, tr.instructor_recommendation_for_exam, tr.feedback, s.full_name AS student_name, tp.name AS program_name FROM training_records tr JOIN users s ON tr.student_user_id = s.user_id LEFT JOIN training_programs tp ON tr.program_id = tp.program_id WHERE tr.instructor_user_id = ? ORDER BY tr.created_at DESC LIMIT 12");
     $stmtRecent->execute([$instructor_id]);
     $recent_records = $stmtRecent->fetchAll(PDO::FETCH_ASSOC);
 } catch(PDOException $e) {}
@@ -230,6 +301,17 @@ try {
                   <?php foreach($student_schedules as $schedule): ?>
                     <option value="<?php echo intval($schedule['schedule_id']); ?>">
                       <?php echo htmlspecialchars($schedule['lesson_type']); ?> - <?php echo date('Y-m-d H:i', strtotime($schedule['scheduled_datetime'])); ?> (<?php echo intval($schedule['duration_minutes']); ?> min)
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Program</label>
+                <select name="program_id" class="form-control" required>
+                  <option value="">-- Choose Program --</option>
+                  <?php foreach($student_programs as $program): ?>
+                    <option value="<?php echo intval($program['program_id']); ?>">
+                      <?php echo htmlspecialchars($program['name']); ?> (<?php echo htmlspecialchars($program['license_category']); ?>)
                     </option>
                   <?php endforeach; ?>
                 </select>
@@ -338,6 +420,7 @@ try {
                   <tr>
                     <th>Date</th>
                     <th>Student</th>
+                    <th>Program</th>
                     <th>Lesson</th>
                     <th>Score</th>
                     <th>Attendance</th>
@@ -349,6 +432,7 @@ try {
                   <tr>
                     <td><?php echo date('Y-m-d H:i', strtotime($record['created_at'])); ?></td>
                     <td class="font-bold"><?php echo htmlspecialchars($record['student_name']); ?></td>
+                    <td><?php echo htmlspecialchars($record['program_name'] ?? '-'); ?></td>
                     <td><?php echo htmlspecialchars($record['lesson_type']); ?></td>
                     <td><?php echo $record['performance_score'] !== null ? number_format((float)$record['performance_score'], 2) : '-'; ?></td>
                     <td><span class="badge <?php echo instructor_badge_class($record['attendance_status']); ?>"><?php echo htmlspecialchars($record['attendance_status']); ?></span></td>
@@ -356,7 +440,7 @@ try {
                   </tr>
                   <?php endforeach; ?>
                   <?php if(count($recent_records) === 0): ?>
-                  <tr><td colspan="6" class="text-center text-muted">No training records found yet.</td></tr>
+                  <tr><td colspan="7" class="text-center text-muted">No training records found yet.</td></tr>
                   <?php endif; ?>
                 </tbody>
               </table>
