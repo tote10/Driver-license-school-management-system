@@ -131,15 +131,8 @@ $stats = [
     );
     $stmtExams->execute([$student_id]);
     $exam_records = $stmtExams->fetchAll(PDO::FETCH_ASSOC);
-    $stmtNotifications = $pdo->prepare(
-      "SELECT n.notification_id, n.title, n.message, n.created_at, n.is_read
-       FROM notifications n
-       WHERE n.user_id = ?
-       ORDER BY n.created_at DESC
-       LIMIT 3"
-    );
-    $stmtNotifications->execute([$student_id]);
-    $notifications = $stmtNotifications->fetchAll(PDO::FETCH_ASSOC);
+    require_once __DIR__ . '/../includes/notifications.php';
+    $notifications = fetch_user_notifications($pdo, $student_id, 3);
 } catch(PDOException $e) {}
 ?>
 <!doctype html>

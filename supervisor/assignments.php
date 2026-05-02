@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/../includes/notifications.php';
 
 if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'supervisor'){
     header("Location: ../login.php");
@@ -102,6 +103,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'assign
 
         $assignment_id = intval($pdo->lastInsertId());
 
+        send_notification($pdo, $student_id, 'instructor_assigned', 'Instructor assigned', 'An instructor has been assigned to your current training program: ' . $student['program_name']);
+        send_notification($pdo, $instructor_id, 'assigned_student', 'New student assigned', 'You have been assigned to student ' . $student['full_name'] . ' for ' . $student['program_name'] . '.');
+
         log_audit_action(
             $pdo,
             $supervisor_id,
@@ -146,6 +150,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'unassi
         }
         $stmtUpdate = $pdo->prepare("UPDATE instructor_assignments SET status = 'inactive' WHERE assignment_id = ?");
         $stmtUpdate->execute([$assignment_id]);
+        send_notification($pdo, intval($row['student_user_id']), 'instructor_unassigned', 'Instructor unassigned', 'Your instructor assignment has been removed. A new assignment may be created later.');
+        send_notification($pdo, intval($row['instructor_user_id']), 'student_unassigned', 'Student unassigned', 'Your assignment to ' . $row['student_name'] . ' has been removed.');
         log_audit_action(
             $pdo,
             $supervisor_id,

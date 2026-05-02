@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/db.php';
 require_once __DIR__ . '/includes/graduation_helpers.php';
+require_once __DIR__ . '/../includes/notifications.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
@@ -61,6 +62,13 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
 
               $stmt = $pdo->prepare("INSERT INTO exam_records (student_user_id, program_id, exam_type, scheduled_date, status) VALUES (?, ?, ?, ?, 'scheduled')");
               $stmt->execute([$sid, $program_id, $type, $date]);
+                $stmtProgram = $pdo->prepare("SELECT name FROM training_programs WHERE program_id = ? LIMIT 1");
+                $stmtProgram->execute([$program_id]);
+                $programName = (string)($stmtProgram->fetchColumn() ?: 'your program');
+                $studentNotification = $type === 'theory'
+                  ? 'Your theory exam has been scheduled for ' . $date . ' in ' . $programName . '.'
+                  : 'Your practical exam has been scheduled for ' . $date . ' in ' . $programName . '.';
+                send_notification($pdo, $sid, 'exam_scheduled', 'Exam scheduled', $studentNotification);
                 log_audit_action($pdo, $manager_id, 'exam_scheduled', 'exam_record', intval($pdo->lastInsertId()), 'Scheduled ' . $type . ' exam for student ' . $sid . ' in program ' . $program_id);
                 $message = "<div class='toast show'>Exam scheduled successfully!</div>";
             } catch(Exception $e) { $message = "<div class='toast show bg-danger'>Error: ".$e->getMessage()."</div>"; }
@@ -80,6 +88,22 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
 
         $stmt = $pdo->prepare("UPDATE exam_records SET score = ?, passed = ?, status = 'pending_approval', taken_date = NOW(), recorded_by = ? WHERE exam_id = ?");
         $stmt->execute([$score, $passed, $manager_id, $eid]);
+        $stmtExamInfo = $pdo->prepare("SELECT student_user_id, program_id, exam_type, scheduled_date FROM exam_records WHERE exam_id = ? LIMIT 1");
+        $stmtExamInfo->execute([$eid]);
+        $examInfo = $stmtExamInfo->fetch(PDO::FETCH_ASSOC);
+        if ($examInfo) {
+          $stmtProgram = $pdo->prepare("SELECT name FROM training_programs WHERE program_id = ? LIMIT 1");
+          $stmtProgram->execute([intval($examInfo['program_id'])]);
+          $programName = (string)($stmtProgram->fetchColumn() ?: 'your program');
+          $resultText = $passed ? 'passed' : 'did not pass';
+          send_notification(
+            $pdo,
+            intval($examInfo['student_user_id']),
+            'exam_result',
+            'Exam result recorded',
+            ucfirst($examInfo['exam_type']) . ' exam result recorded for ' . $programName . ': you ' . $resultText . ' with score ' . $score . '.'
+          );
+        }
         log_audit_action($pdo, $manager_id, 'exam_result_recorded', 'exam_record', $eid, 'Recorded result for exam ' . $eid . ' with score ' . $score . ' and passed=' . $passed);
             $message = "<div class='toast show'>Result saved, awaiting approval.</div>";
         } catch(Exception $e) { $message = "<div class='toast show bg-danger'>Error: ".$e->getMessage()."</div>"; }
@@ -124,6 +148,19 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
             );
             $stmtProgress->execute([$studentId, $programId]);
           }
+        }
+
+        if ($approvedExam) {
+          $stmtProgram = $pdo->prepare("SELECT name FROM training_programs WHERE program_id = ? LIMIT 1");
+          $stmtProgram->execute([intval($approvedExam['program_id'])]);
+          $programName = (string)($stmtProgram->fetchColumn() ?: 'your program');
+          send_notification(
+            $pdo,
+            intval($approvedExam['student_user_id']),
+            'exam_approved',
+            'Exam result approved',
+            ucfirst((string)$approvedExam['exam_type']) . ' exam result for ' . $programName . ' has been approved.'
+          );
         }
 
         log_audit_action($pdo, $manager_id, 'exam_result_approved', 'exam_record', $eid, 'Approved exam result for exam ' . $eid);

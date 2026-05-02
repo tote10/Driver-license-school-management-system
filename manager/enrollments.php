@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/../includes/notifications.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
@@ -41,6 +42,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
             $stmt2 = $pdo->prepare("UPDATE students SET registration_status = 'approved' WHERE user_id = ?");
             $stmt2->execute([$id]);
             log_audit_action($pdo, $_SESSION['user_id'], 'account_approved', 'user', $id, 'Approved student account ' . $id);
+            send_notification($pdo, $id, 'account_approved', 'Account approved', 'Your student account has been approved. You can now log in and continue registration.');
             $message = "<div class='toast show'>Student account activated! They can now log in and select a program.</div>";
         } elseif ($type === 'enrollment') {
             $stmtCheck = $pdo->prepare("
@@ -72,6 +74,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
             $stmt = $pdo->prepare("UPDATE enrollments SET approval_status = 'approved', approved_date = NOW() WHERE enrollment_id = ?");
             $stmt->execute([$id]);
             log_audit_action($pdo, $_SESSION['user_id'], 'enrollment_approved', 'enrollment', $id, 'Approved enrollment ' . $id);
+            send_notification($pdo, intval($enrollment['student_user_id']), 'enrollment_approved', 'Enrollment approved', 'Your enrollment for ' . ($enrollment['program_license'] ?? 'your program') . ' has been approved.');
             $message = "<div class='toast show'>Program enrollment approved!</div>";
         }
         } catch(Exception $e) { $message = "<div class='toast show bg-danger'>Error: ".$e->getMessage()."</div>"; }
@@ -115,6 +118,10 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
             $stmt = $pdo->prepare("INSERT INTO enrollments (student_user_id, program_id, approval_status, approved_by, approved_date, current_progress_status) VALUES (?, ?, 'approved', ?, NOW(), 'enrolled')");
             $stmt->execute([$student_id, $program_id, $_SESSION['user_id']]);
             log_audit_action($pdo, $_SESSION['user_id'], 'manual_enrollment_created', 'enrollment', intval($pdo->lastInsertId()), 'Manually enrolled student ' . $student_id . ' into program ' . $program_id);
+            $stmtProgramName = $pdo->prepare("SELECT name FROM training_programs WHERE program_id = ? LIMIT 1");
+            $stmtProgramName->execute([$program_id]);
+            $program_name = (string)($stmtProgramName->fetchColumn() ?: 'your training program');
+            send_notification($pdo, $student_id, 'manual_enrollment', 'Enrollment added', 'You have been enrolled in ' . $program_name . '.');
             $message = "<div class='toast show'>Student officially enrolled into program!</div>";
           }
         }

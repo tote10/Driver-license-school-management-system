@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/db.php';
 require_once __DIR__ . '/includes/graduation_helpers.php';
+require_once __DIR__ . '/../includes/notifications.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
@@ -79,6 +80,11 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
             $stmtE = $pdo->prepare("UPDATE enrollments SET current_progress_status = 'graduated', last_progress_update = NOW() WHERE student_user_id = ? AND approval_status = 'approved'");
             $stmtE->execute([$sid]);
 
+            $stmtStudent = $pdo->prepare("SELECT full_name FROM users WHERE user_id = ? LIMIT 1");
+            $stmtStudent->execute([$sid]);
+            $studentName = (string)($stmtStudent->fetchColumn() ?: 'Student');
+            send_notification($pdo, $sid, 'certificate_issued', 'Certificate issued', 'Congratulations ' . $studentName . ', your certificate ' . $cert_no . ' has been issued.');
+
             log_audit_action($pdo, $manager_id, 'certificate_issued', 'certificate', $certificate_id, 'Issued certificate ' . $cert_no . ' for student ' . $sid . ' in enrollment ' . $eid);
             
             $pdo->commit();
@@ -114,6 +120,8 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
 
             $stmtReject = $pdo->prepare("UPDATE enrollments SET current_progress_status = 'failed', last_progress_update = NOW() WHERE enrollment_id = ?");
             $stmtReject->execute([$eid]);
+
+            send_notification($pdo, $sid, 'graduation_rejected', 'Graduation rejected', 'Your graduation request has been rejected. You can continue training and re-apply later.');
 
             log_audit_action($pdo, $manager_id, 'certificate_rejected', 'enrollment', $eid, 'Rejected graduation for student ' . $sid . ' on enrollment ' . $eid);
 

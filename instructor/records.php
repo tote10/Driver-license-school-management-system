@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/common.php';
+require_once __DIR__ . '/../../includes/notifications.php';
 
 $page_title = 'Training Records';
 $message = '';
@@ -160,6 +161,16 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_r
         if($schedule_id > 0) {
             $stmtUpdateSchedule = $pdo->prepare("UPDATE training_schedules SET status = 'completed' WHERE schedule_id = ? AND instructor_user_id = ?");
             $stmtUpdateSchedule->execute([$schedule_id, $instructor_id]);
+        }
+
+        if($recommend_exam) {
+          $stmtStudentName = $pdo->prepare("SELECT full_name FROM users WHERE user_id = ? LIMIT 1");
+          $stmtStudentName->execute([$student_id]);
+          $studentName = (string)($stmtStudentName->fetchColumn() ?: 'Student');
+          $stmtProgramName = $pdo->prepare("SELECT name FROM training_programs WHERE program_id = ? LIMIT 1");
+          $stmtProgramName->execute([$program_id]);
+          $programName = (string)($stmtProgramName->fetchColumn() ?: 'your program');
+          send_notification($pdo, $student_id, 'exam_readiness', 'Exam readiness recommended', 'Your instructor marked you as ready for exam consideration in ' . $programName . '.');
         }
 
         $message = "<div class='toast show'>Training record saved successfully.</div>";

@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   // Toast Notification System for prototype buttons
   const buttons = document.querySelectorAll(
-    '.btn:not([type="submit"]):not([disabled]):not(.text-danger), .sidebar-item:not(.active)',
+    '.btn:not([type="submit"]):not([disabled]):not(.text-danger):not(.notifications-toggle), .sidebar-item:not(.active)',
   );
 
   if (buttons.length > 0) {
@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Only prevent default if it's a dummy link or a standard button
         if (
           (btn.tagName === "A" && btn.getAttribute("href") === "#") ||
-          btn.tagName === "BUTTON"
+          (btn.tagName === "BUTTON" && !btn.classList.contains("notifications-toggle"))
         ) {
           e.preventDefault();
 
