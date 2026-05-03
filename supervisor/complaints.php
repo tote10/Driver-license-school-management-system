@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/../includes/notifications.php';
 require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'supervisor'){
@@ -9,6 +10,7 @@ if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'supervisor'){
 }
 
 $branch_id = intval($_SESSION['branch_id'] ?? 0);
+$supervisor_id = intval($_SESSION['user_id'] ?? 0);
 $full_name = ds_display_name('Supervisor');
 $initials = ds_display_initials($full_name, 'Supervisor');
 
@@ -72,6 +74,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update
     if(intval($complaint['branch_id']) !== $branch_id) {
       throw new Exception('Complaint is not in your branch.');
     }
+    if($new_status === 'forwarded' && $resolution === '') {
+      throw new Exception('Add forwarding note before sending to manager.');
+    }
+
+    $final_resolution = $resolution !== '' ? $resolution : complaint_status_label($new_status) . ' by supervisor';
 
     $stmtUpdate = $pdo->prepare(
       "UPDATE complaints
@@ -84,11 +91,43 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update
     $stmtUpdate->execute([
       $new_status,
       $supervisor_id,
-      $resolution !== '' ? $resolution : complaint_status_label($new_status) . ' by supervisor',
+      $final_resolution,
       $complaint_id,
     ]);
 
-    $message = "<div class='toast show'>Complaint updated successfully.</div>";
+    $statusLabel = complaint_status_label($new_status);
+    $studentTitle = 'Complaint update from supervisor';
+    $studentMessage = 'Your complaint #' . intval($complaint_id) . ' is now "' . $statusLabel . '". Supervisor note: ' . $final_resolution;
+    send_notification(
+      $pdo,
+      intval($complaint['reporter_user_id'] ?? 0),
+      'complaint_update',
+      $studentTitle,
+      $studentMessage
+    );
+
+    if($new_status === 'forwarded') {
+      $managerTitle = 'Complaint forwarded by supervisor';
+      $managerMessage = 'Complaint #' . intval($complaint_id)
+        . ' from ' . ($complaint['reporter_name'] ?? 'student')
+        . ' has been forwarded for manager review. Note: ' . $final_resolution;
+      $notifiedCount = send_notification_to_branch_role(
+        $pdo,
+        $branch_id,
+        'manager',
+        'complaint_forwarded',
+        $managerTitle,
+        $managerMessage
+      );
+
+      if($notifiedCount === 0) {
+        $message = "<div class='toast show bg-danger'>Complaint marked as forwarded, but no active manager in this branch received notification.</div>";
+      } else {
+        $message = "<div class='toast show'>Complaint forwarded to manager successfully.</div>";
+      }
+    } else {
+      $message = "<div class='toast show'>Complaint updated successfully.</div>";
+    }
   } catch(Exception $e) {
     $message = "<div class='toast show bg-danger'>Error: " . htmlspecialchars($e->getMessage()) . "</div>";
   }
@@ -212,7 +251,7 @@ $page_title = 'Complaints Dashboard';
                           <option value="resolved" <?php echo $complaint['status'] === 'resolved' ? 'selected' : ''; ?>>Mark Resolved</option>
                           <option value="closed" <?php echo $complaint['status'] === 'closed' ? 'selected' : ''; ?>>Close</option>
                         </select>
-                        <input type="text" name="resolution" class="form-control form-control-sm" placeholder="Add notes or resolution" value="<?php echo htmlspecialchars($complaint['resolution'] ?? ''); ?>">
+                        <input type="text" name="resolution" class="form-control form-control-sm" placeholder="Add notes (required when forwarding to manager)" value="<?php echo htmlspecialchars($complaint['resolution'] ?? ''); ?>">
                         <button type="submit" class="btn btn-primary btn-sm">Save</button>
                       </form>
                     </td>
