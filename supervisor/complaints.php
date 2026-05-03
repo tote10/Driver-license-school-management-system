@@ -48,7 +48,8 @@ function complaint_status_is_archive($status) {
 if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_complaint') {
   $complaint_id = intval($_POST['complaint_id'] ?? 0);
   $new_status = strtolower(trim((string)($_POST['new_status'] ?? '')));
-  $resolution = trim((string)($_POST['resolution'] ?? ''));
+  $internal_note = trim((string)($_POST['internal_note'] ?? ''));
+  $student_reply = trim((string)($_POST['student_reply'] ?? ''));
 
   try {
     if($complaint_id <= 0) {
@@ -74,11 +75,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update
     if(intval($complaint['branch_id']) !== $branch_id) {
       throw new Exception('Complaint is not in your branch.');
     }
-    if($new_status === 'forwarded' && $resolution === '') {
+    if($new_status === 'forwarded' && $internal_note === '') {
       throw new Exception('Add forwarding note before sending to manager.');
     }
 
-    $final_resolution = $resolution !== '' ? $resolution : complaint_status_label($new_status) . ' by supervisor';
+    $final_resolution = $internal_note !== '' ? $internal_note : complaint_status_label($new_status) . ' by supervisor';
 
     $stmtUpdate = $pdo->prepare(
       "UPDATE complaints
@@ -97,7 +98,10 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update
 
     $statusLabel = complaint_status_label($new_status);
     $studentTitle = 'Complaint update from supervisor';
-    $studentMessage = 'Your complaint #' . intval($complaint_id) . ' is now "' . $statusLabel . '". Supervisor note: ' . $final_resolution;
+    $studentMessage = 'Your complaint #' . intval($complaint_id) . ' is now "' . $statusLabel . '".';
+    if($student_reply !== '') {
+      $studentMessage .= ' Response: ' . $student_reply;
+    }
     send_notification(
       $pdo,
       intval($complaint['reporter_user_id'] ?? 0),
@@ -251,7 +255,8 @@ $page_title = 'Complaints Dashboard';
                           <option value="resolved" <?php echo $complaint['status'] === 'resolved' ? 'selected' : ''; ?>>Mark Resolved</option>
                           <option value="closed" <?php echo $complaint['status'] === 'closed' ? 'selected' : ''; ?>>Close</option>
                         </select>
-                        <input type="text" name="resolution" class="form-control form-control-sm" placeholder="Add notes (required when forwarding to manager)" value="<?php echo htmlspecialchars($complaint['resolution'] ?? ''); ?>">
+                        <input type="text" name="internal_note" class="form-control form-control-sm" placeholder="Internal note (required when forwarding)" value="<?php echo htmlspecialchars($complaint['resolution'] ?? ''); ?>">
+                        <input type="text" name="student_reply" class="form-control form-control-sm" placeholder="Reply to student (sent as notification)">
                         <button type="submit" class="btn btn-primary btn-sm">Save</button>
                       </form>
                     </td>
