@@ -1,7 +1,7 @@
 <?php
 session_start();
-require_once 'config/db.php';
-require_once 'includes/notifications.php';
+require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/includes/notifications.php';
 
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['role'])) {
     header('Location: login.php');
@@ -12,8 +12,16 @@ $user_id = intval($_SESSION['user_id']);
 $role = $_SESSION['role'];
 $page_title = 'Notifications';
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_read'])) {
+  mark_notification_read($pdo, intval($_POST['mark_read']), $user_id);
+  header('Location: notifications.php');
+  exit();
+}
+
 if (isset($_GET['read'])) {
-    mark_notification_read($pdo, intval($_GET['read']), $user_id);
+  mark_notification_read($pdo, intval($_GET['read']), $user_id);
+  header('Location: notifications.php');
+  exit();
 }
 
 $notifications = fetch_user_notifications($pdo, $user_id, 100);
@@ -44,9 +52,9 @@ $sidebar_include = match ($role) {
 </head>
 <body>
   <div class="app-wrapper">
-    <?php if ($sidebar_include && file_exists($sidebar_include)) { include $sidebar_include; } ?>
+    <?php if ($sidebar_include && file_exists(__DIR__ . '/' . $sidebar_include)) { include __DIR__ . '/' . $sidebar_include; } ?>
     <div class="main-content">
-      <?php if (file_exists($topbar_include)) { include $topbar_include; } ?>
+      <?php if (file_exists(__DIR__ . '/' . $topbar_include)) { include __DIR__ . '/' . $topbar_include; } ?>
       <main class="page-content">
         <div class="card">
           <div class="d-flex justify-between align-center mb-3">
@@ -82,7 +90,9 @@ $sidebar_include = match ($role) {
                       <td><?php echo !empty($note['sent_at']) ? date('Y-m-d H:i', strtotime($note['sent_at'])) : '-'; ?></td>
                       <td>
                         <?php if (intval($note['is_read'] ?? 0) === 0): ?>
-                          <a class="btn btn-outline btn-sm" href="notifications.php?read=<?php echo intval($note['notification_id']); ?>">Mark read</a>
+                          <form method="post" style="margin:0; display:inline;">
+                            <button type="submit" name="mark_read" value="<?php echo intval($note['notification_id']); ?>" class="btn btn-outline btn-sm">Mark read</button>
+                          </form>
                         <?php else: ?>
                           <span class="text-sm text-muted">Done</span>
                         <?php endif; ?>

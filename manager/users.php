@@ -1,20 +1,20 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
     exit();
 }
 $branch_id = $_SESSION['branch_id'];
-$full_name = $_SESSION['full_name'] ?? 'Manager';
+$full_name = ds_display_name('Manager');
 $message   = "";
-// Safe initials
-$name_parts = explode(' ', trim($full_name));
-$initials = strtoupper(substr($name_parts[0], 0, 1));
-if(count($name_parts) > 1) {
-    $initials .= strtoupper(substr(end($name_parts), 0, 1));
-}
+// Filters
+$filter_role = trim((string)($_GET['filter_role'] ?? ''));
+$filter_status = trim((string)($_GET['filter_status'] ?? ''));
+$filter_q = trim((string)($_GET['q'] ?? ''));
+$initials = ds_display_initials($full_name, 'Manager');
 
 // --- ACTION: CREATE STAFF ---
 if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'create'){
@@ -96,12 +96,33 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
       }
     }
 
-// Fetch users
+// Fetch users with filters
 $users = [];
 try {
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE branch_id = ? ORDER BY role DESC, full_name ASC");
-    $stmt->execute([$branch_id]);
-    $users = $stmt->fetchAll();
+  $sql = "SELECT * FROM users WHERE branch_id = ?";
+  $params = [$branch_id];
+  if($filter_role !== ''){ $sql .= " AND role = ?"; $params[] = $filter_role; }
+  if($filter_status !== ''){ $sql .= " AND status = ?"; $params[] = $filter_status; }
+  if($filter_q !== ''){ $sql .= " AND (full_name LIKE ? OR email LIKE ? OR username LIKE ? )"; $like = '%'.$filter_q.'%'; $params[] = $like; $params[] = $like; $params[] = $like; }
+  $sql .= " ORDER BY role DESC, full_name ASC";
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  $users = $stmt->fetchAll();
+
+  // Attach latest profile photo and ID document to each user for manager view
+  foreach($users as &$uu){
+    $uid = intval($uu['user_id']);
+    $stmtDoc = $pdo->prepare("SELECT document_type, file_url FROM documents WHERE entity_id = ? AND entity_type = 'user' ORDER BY uploaded_at DESC");
+    $stmtDoc->execute([$uid]);
+    $docs = $stmtDoc->fetchAll(PDO::FETCH_ASSOC);
+    $uu['profile_photo'] = '';
+    $uu['id_document'] = '';
+    foreach($docs as $doc){
+      if($uu['profile_photo'] === '' && $doc['document_type'] === 'profile_photo') $uu['profile_photo'] = $doc['file_url'];
+      if($uu['id_document'] === '' && $doc['document_type'] === 'id_document') $uu['id_document'] = $doc['file_url'];
+    }
+  }
+  unset($uu);
 } catch(PDOException $e) {}
 
 ?>
@@ -138,6 +159,14 @@ try {
                   <label class="form-label">Full Name</label>
                   <input type="text" name="full_name" id="edit_full_name" class="form-control" required>
                 </div>
+                  <div class="form-group">
+                    <label class="form-label">Profile Photo</label>
+                    <div id="edit_profile_photo_preview"></div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">ID Document</label>
+                    <div id="edit_id_document_link"></div>
+                  </div>
                 <div class="form-group">
                   <label class="form-label">Email</label>
                   <input type="email" name="email" id="edit_email" class="form-control" required>
@@ -221,6 +250,39 @@ try {
               </form>
           </div>
 
+          <div class="card p-2 mb-2">
+            <h3 class="card-subtitle mb-1">Filters</h3>
+            <form method="GET" class="d-flex gap-sm align-center">
+              <div class="form-group mb-0">
+                <label class="form-label">Role</label>
+                <select name="filter_role" class="form-control" onchange="this.form.submit()">
+                  <option value="">All Roles</option>
+                  <option value="student" <?php echo $filter_role==='student' ? 'selected' : ''; ?>>Student</option>
+                  <option value="instructor" <?php echo $filter_role==='instructor' ? 'selected' : ''; ?>>Instructor</option>
+                  <option value="supervisor" <?php echo $filter_role==='supervisor' ? 'selected' : ''; ?>>Supervisor</option>
+                  <option value="manager" <?php echo $filter_role==='manager' ? 'selected' : ''; ?>>Manager</option>
+                </select>
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Status</label>
+                <select name="filter_status" class="form-control" onchange="this.form.submit()">
+                  <option value="">Any</option>
+                  <option value="active" <?php echo $filter_status==='active' ? 'selected' : ''; ?>>Active</option>
+                  <option value="pending" <?php echo $filter_status==='pending' ? 'selected' : ''; ?>>Pending</option>
+                  <option value="suspended" <?php echo $filter_status==='suspended' ? 'selected' : ''; ?>>Suspended</option>
+                </select>
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Search</label>
+                <input type="search" name="q" class="form-control" placeholder="Name, email or username" value="<?php echo htmlspecialchars($filter_q); ?>">
+              </div>
+              <div class="form-group mb-0">
+                <button type="submit" class="btn btn-outline">Apply</button>
+                <a href="users.php" class="btn btn-outline">Reset</a>
+              </div>
+            </form>
+          </div>
+
           <div class="card">
             <h3 class="card-subtitle mb-1">Branch Staff Directory</h3>
             <div class="table-responsive">
@@ -282,6 +344,28 @@ try {
           document.getElementById('edit_role').value = user.role || 'instructor';
           document.getElementById('edit_status').value = user.status || 'active';
           document.getElementById('edit_password').value = '';
+          // profile photo preview
+          const photoContainer = document.getElementById('edit_profile_photo_preview');
+          photoContainer.innerHTML = '';
+          if(user.profile_photo){
+            const img = document.createElement('img');
+            img.src = '../' + user.profile_photo;
+            img.style.width = '64px'; img.style.height = '64px'; img.style.objectFit = 'cover'; img.style.borderRadius = '50%'; img.style.border = '2px solid var(--primary)';
+            photoContainer.appendChild(img);
+          } else {
+            photoContainer.innerHTML = '<span class="text-sm text-muted">No photo</span>';
+          }
+          // id document link
+          const idContainer = document.getElementById('edit_id_document_link');
+          idContainer.innerHTML = '';
+          if(user.id_document){
+            const a = document.createElement('a');
+            a.href = '../' + user.id_document; a.target = '_blank'; a.className = 'badge badge-primary';
+            a.innerText = 'View ID Document';
+            idContainer.appendChild(a);
+          } else {
+            idContainer.innerHTML = '<span class="text-sm text-muted">No ID uploaded</span>';
+          }
           document.getElementById('editUserCard').style.display = 'block';
           document.getElementById('editUserCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
         });

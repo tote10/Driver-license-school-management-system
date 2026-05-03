@@ -3,6 +3,7 @@ if(session_status() === PHP_SESSION_NONE){
     session_start();
 }
 require_once __DIR__ . '/../../config/db.php';
+require_once __DIR__ . '/../../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'instructor'){
     header('Location: ../login.php');
@@ -11,12 +12,8 @@ if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'instructor'){
 
 $instructor_id = intval($_SESSION['user_id']);
 $branch_id = intval($_SESSION['branch_id'] ?? 0);
-$full_name = $_SESSION['full_name'] ?? 'Instructor';
-$name_parts = explode(' ', trim($full_name));
-$initials = strtoupper(substr($name_parts[0], 0, 1));
-if(count($name_parts) > 1) {
-    $initials .= strtoupper(substr(end($name_parts), 0, 1));
-}
+$full_name = ds_display_name('Instructor');
+$initials = ds_display_initials($full_name, 'Instructor');
 
 function instructor_badge_class($value) {
     $value = strtolower(trim((string)$value));

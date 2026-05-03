@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'student'){
     header('Location: ../login.php');
@@ -9,14 +10,10 @@ if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'student'){
 
 $student_id = intval($_SESSION['user_id']);
 $branch_id = intval($_SESSION['branch_id'] ?? 0);
-$full_name = $_SESSION['full_name'] ?? 'Student';
+$full_name = ds_display_name('Student');
 $page_title = 'Student Dashboard';
 
-$name_parts = explode(' ', trim($full_name));
-$initials = strtoupper(substr($name_parts[0], 0, 1));
-if(count($name_parts) > 1) {
-    $initials .= strtoupper(substr(end($name_parts), 0, 1));
-}
+$initials = ds_display_initials($full_name, 'Student');
 
 function student_badge_class($value) {
     $value = strtolower(trim((string)$value));
@@ -167,7 +164,7 @@ $stats = [
       <main class="page-content">
         <div class="hero-bar d-flex flex-wrap justify-between gap-md align-center">
           <div>
-            <h2 class="welcome-heading" style="margin-bottom: 6px;">Welcome back, <span><?php echo htmlspecialchars($name_parts[0]); ?></span>!</h2>
+            <h2 class="welcome-heading" style="margin-bottom: 6px;">Welcome back, <span><?php echo htmlspecialchars($full_name); ?></span>!</h2>
             <p class="text-sm text-muted mb-0">Quick overview of your program, instructor and upcoming lesson.</p>
           </div>
           <div class="d-flex gap-sm flex-wrap">
@@ -208,7 +205,7 @@ $stats = [
                   <li class="mb-2">
                     <div class="font-bold"><?php echo htmlspecialchars($n['title']); ?></div>
                     <div class="text-sm text-muted mb-1"><?php echo htmlspecialchars(substr($n['message'],0,120)); ?><?php echo strlen($n['message'])>120? '…': ''; ?></div>
-                    <div class="text-xs text-muted"><?php echo date('M d, H:i', strtotime($n['created_at'])); ?></div>
+                    <div class="text-xs text-muted"><?php echo !empty($n['sent_at']) ? date('M d, H:i', strtotime($n['sent_at'])) : '-'; ?></div>
                   </li>
                 <?php endforeach; ?>
               </ul>

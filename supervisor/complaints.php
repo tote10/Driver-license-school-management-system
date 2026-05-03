@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'supervisor'){
     header("Location: ../login.php");
@@ -8,12 +9,8 @@ if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'supervisor'){
 }
 
 $branch_id = intval($_SESSION['branch_id'] ?? 0);
-$full_name = $_SESSION['full_name'] ?? 'Supervisor';
-$name_parts = explode(' ', trim($full_name));
-$initials = strtoupper(substr($name_parts[0], 0, 1));
-if(count($name_parts) > 1) {
-    $initials .= strtoupper(substr(end($name_parts), 0, 1));
-}
+$full_name = ds_display_name('Supervisor');
+$initials = ds_display_initials($full_name, 'Supervisor');
 
 $complaints = [];
 $status_filter = strtolower(trim((string)($_GET['status'] ?? 'all')));
@@ -128,6 +125,25 @@ $page_title = 'Complaints Dashboard';
     <title>Complaints</title>
     <link rel="stylesheet" href="../assets/css/style.css?v=<?php echo time(); ?>" />
     <script src="../assets/js/app.js" defer></script>
+    <style>
+      .complaints-table {
+        width: 100%;
+        table-layout: fixed;
+      }
+      .complaints-table th,
+      .complaints-table td {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        vertical-align: top;
+      }
+      .complaints-table .complaints-action-form {
+        min-width: 180px;
+        width: 100%;
+      }
+      .complaints-table .complaints-action-form .form-control {
+        width: 100%;
+      }
+    </style>
   </head>
   <body>
     <div class="app-wrapper">
@@ -162,7 +178,7 @@ $page_title = 'Complaints Dashboard';
             </div>
 
             <div class="table-responsive">
-              <table class="table">
+              <table class="table complaints-table">
                 <thead>
                   <tr>
                     <th>Reporter</th>
@@ -186,7 +202,7 @@ $page_title = 'Complaints Dashboard';
                     <td><?php echo htmlspecialchars($complaint['resolution'] ?? '-'); ?></td>
                     <td><?php echo date('Y-m-d H:i', strtotime($complaint['reported_date'])); ?></td>
                     <td>
-                      <form method="post" class="d-flex flex-col gap-sm" style="min-width: 240px; margin: 0;">
+                      <form method="post" class="d-flex flex-col gap-sm complaints-action-form" style="margin: 0;">
                         <input type="hidden" name="action" value="update_complaint">
                         <input type="hidden" name="complaint_id" value="<?php echo intval($complaint['complaint_id']); ?>">
                         <select name="new_status" class="form-control form-control-sm" required>

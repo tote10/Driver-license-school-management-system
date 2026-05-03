@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
@@ -61,12 +62,8 @@ $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
 $stmt->execute([$user_id]);
 $user = $stmt->fetch();
 
-$full_name = $_SESSION['full_name'] ?? 'Manager';
-$name_parts = explode(' ', trim($full_name));
-$initials = strtoupper(substr($name_parts[0], 0, 1));
-if(count($name_parts) > 1) {
-    $initials .= strtoupper(substr(end($name_parts), 0, 1));
-}
+$full_name = ds_display_name('Manager');
+$initials = ds_display_initials($full_name, 'Manager');
 
 ?>
 <!doctype html>

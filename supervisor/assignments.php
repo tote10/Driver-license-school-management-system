@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/db.php';
 require_once __DIR__ . '/../includes/notifications.php';
+require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'supervisor'){
     header("Location: ../login.php");
@@ -10,7 +11,7 @@ if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'supervisor'){
 
 $branch_id = intval($_SESSION['branch_id'] ?? 0);
 $supervisor_id = intval($_SESSION['user_id']);
-$full_name = $_SESSION['full_name'] ?? 'Supervisor';
+$full_name = ds_display_name('Supervisor');
 $message = '';
 
 function log_audit_action($pdo, $user_id, $action_type, $entity_type, $entity_id, $details) {
@@ -25,11 +26,7 @@ function is_specialization_compatible($student_license, $instructor_specializati
     return $instructor_specialization === '' || strcasecmp($instructor_specialization, 'General') === 0 || strcasecmp($instructor_specialization, $student_license) === 0;
 
 }
-$name_parts = explode(' ', trim($full_name));
-$initials = strtoupper(substr($name_parts[0], 0, 1));
-if(count($name_parts) > 1) {
-    $initials .= strtoupper(substr(end($name_parts), 0, 1));
-}
+$initials = ds_display_initials($full_name, 'Supervisor');
 
 if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'assign_instructor'){
     $student_id = intval($_POST['student_id'] ?? 0);

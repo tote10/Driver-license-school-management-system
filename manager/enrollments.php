@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/db.php';
 require_once __DIR__ . '/../includes/notifications.php';
+require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
@@ -9,7 +10,7 @@ if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
 }
 
 $branch_id = $_SESSION['branch_id'];
-$full_name = $_SESSION['full_name'] ?? 'Manager';
+$full_name = ds_display_name('Manager');
 $message = "";
 $selected_student_id = intval($_GET['student_id'] ?? 0);
 
@@ -24,12 +25,7 @@ function license_category_matches($student_category, $program_category) {
     && strcasecmp(trim((string)$student_category), trim((string)$program_category)) === 0;
 }
 
-// Safe initials
-$name_parts = explode(' ', trim($full_name));
-$initials = strtoupper(substr($name_parts[0], 0, 1));
-if(count($name_parts) > 1) {
-    $initials .= strtoupper(substr(end($name_parts), 0, 1));
-}
+$initials = ds_display_initials($full_name, 'Manager');
 
 // Action: Approve
 if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'approve'){

@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/common.php';
-require_once __DIR__ . '/../../includes/notifications.php';
+require_once __DIR__ . '/../includes/notifications.php';
 
 $page_title = 'Training Records';
 $message = '';

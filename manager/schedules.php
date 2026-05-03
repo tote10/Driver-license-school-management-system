@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/db.php';
 require_once __DIR__ . '/includes/graduation_helpers.php';
+require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'manager'){
     header('Location: ../login.php');
@@ -10,16 +11,12 @@ if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'manager'){
 
 $branch_id = intval($_SESSION['branch_id'] ?? 0);
 $manager_id = intval($_SESSION['user_id']);
-$full_name = $_SESSION['full_name'] ?? 'Manager';
+$full_name = ds_display_name('Manager');
 $message = '';
 $selected_student_id = intval($_GET['student_id'] ?? 0);
 $page_title = 'Lesson Schedules';
 
-$name_parts = explode(' ', trim($full_name));
-$initials = strtoupper(substr($name_parts[0], 0, 1));
-if(count($name_parts) > 1) {
-    $initials .= strtoupper(substr(end($name_parts), 0, 1));
-}
+$initials = ds_display_initials($full_name, 'Manager');
 
 function schedule_status_class($status) {
     $status = strtolower(trim((string)$status));

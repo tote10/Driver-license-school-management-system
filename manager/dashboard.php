@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/db.php';
 require_once __DIR__ . '/includes/graduation_helpers.php';
+require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
     header("Location: ../login.php");
@@ -9,7 +10,7 @@ if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
 }
 
 $branch_id = $_SESSION['branch_id'];
-$full_name = $_SESSION['full_name'] ?? 'Manager';
+$full_name = ds_display_name('Manager');
 $pending_enrolls = 0;
 $pending_exams = 0;
 $ready_graduation = 0;
@@ -21,12 +22,7 @@ $reg_target_pct = 0;
 $total_revenue = 0;
 $revenue_target_pct = 0;
 
-// Initials for avatar
-$name_parts = explode(' ', trim($full_name));
-$initials = strtoupper(substr($name_parts[0], 0, 1));
-if(count($name_parts) > 1) {
-    $initials .= strtoupper(substr(end($name_parts), 0, 1));
-}
+$initials = ds_display_initials($full_name, 'Manager');
 
 try {
     // 1. Core Alerts (Action Items)
@@ -105,7 +101,7 @@ try {
         <!-- Page Content -->
         <main class="page-content">
           <h2 class="welcome-heading" style="margin-bottom: 20px;">
-            Welcome back, <span><?php echo htmlspecialchars($name_parts[0]); ?></span>!
+            Welcome back, <span><?php echo htmlspecialchars($full_name); ?></span>!
           </h2>
 
           <!-- Action Bar -->

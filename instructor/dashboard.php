@@ -132,7 +132,7 @@ try {
         <?php include __DIR__ . '/includes/topbar.php'; ?>
         <main class="page-content">
           <h2 class="welcome-heading" style="margin-bottom: 20px;">
-            Welcome back, <span><?php echo htmlspecialchars($name_parts[0]); ?></span>!
+            Welcome back, <span><?php echo htmlspecialchars($full_name); ?></span>!
           </h2>
 
           <div class="action-bar d-flex flex-wrap gap-md align-center justify-between w-100">

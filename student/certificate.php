@@ -41,7 +41,11 @@ try {
                   <td><?php echo intval($c['certificate_id']); ?></td>
                   <td><?php echo htmlspecialchars($c['certificate_number']); ?></td>
                   <td><?php echo date('Y-m-d', strtotime($c['issue_date'])); ?></td>
-                  <td><a class="btn btn-outline" href="certificate_download.php?cert_id=<?php echo intval($c['certificate_id']); ?>">View / Download</a></td>
+                  <td class="d-flex gap-sm flex-wrap">
+                    <a class="btn btn-outline btn-sm" href="certificate_download.php?cert_id=<?php echo intval($c['certificate_id']); ?>" target="_blank">View</a>
+                    <a class="btn btn-outline btn-sm" href="certificate_download.php?cert_id=<?php echo intval($c['certificate_id']); ?>&print=1" target="_blank">Print</a>
+                    <a class="btn btn-primary btn-sm" href="certificate_download.php?cert_id=<?php echo intval($c['certificate_id']); ?>&download=1">Download</a>
+                  </td>
                 </tr>
                 <?php endforeach; ?>
                 <?php if(count($certs)===0): ?><tr><td colspan="4" class="text-center text-muted">No certificates issued yet.</td></tr><?php endif; ?>
