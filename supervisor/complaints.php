@@ -180,11 +180,24 @@ $page_title = 'Complaints Dashboard';
         vertical-align: top;
       }
       .complaints-table .complaints-action-form {
-        min-width: 180px;
+        min-width: 240px;
         width: 100%;
       }
-      .complaints-table .complaints-action-form .form-control {
+      .complaints-table .complaints-action-form .form-control,
+      .complaints-table .complaints-action-form textarea {
         width: 100%;
+      }
+      .complaints-action-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted, #6b7280);
+      }
+      .complaints-action-note {
+        font-size: 0.78rem;
+        color: var(--text-muted, #6b7280);
+        line-height: 1.4;
       }
     </style>
   </head>
@@ -240,7 +253,7 @@ $page_title = 'Complaints Dashboard';
                     <td class="font-bold"><?php echo htmlspecialchars($complaint['reporter_name']); ?></td>
                     <td><?php echo htmlspecialchars($complaint['subject_type']); ?></td>
                     <td><?php echo htmlspecialchars($complaint['description']); ?></td>
-                    <td><span class="badge <?php echo complaint_status_class($complaint['status']); ?>"><?php echo htmlspecialchars($complaint['status']); ?></span></td>
+                    <td><span class="badge <?php echo complaint_status_class($complaint['status']); ?>"><?php echo htmlspecialchars(complaint_status_label($complaint['status'])); ?></span></td>
                     <td><?php echo htmlspecialchars($complaint['reviewer_name'] ?? '-'); ?></td>
                     <td><?php echo htmlspecialchars($complaint['resolution'] ?? '-'); ?></td>
                     <td><?php echo date('Y-m-d H:i', strtotime($complaint['reported_date'])); ?></td>
@@ -248,6 +261,7 @@ $page_title = 'Complaints Dashboard';
                       <form method="post" class="d-flex flex-col gap-sm complaints-action-form" style="margin: 0;">
                         <input type="hidden" name="action" value="update_complaint">
                         <input type="hidden" name="complaint_id" value="<?php echo intval($complaint['complaint_id']); ?>">
+                        <div class="complaints-action-title">Update status</div>
                         <select name="new_status" class="form-control form-control-sm" required>
                           <option value="open" <?php echo $complaint['status'] === 'open' ? 'selected' : ''; ?>>Open</option>
                           <option value="in_review" <?php echo $complaint['status'] === 'in_review' ? 'selected' : ''; ?>>In Review</option>
@@ -255,8 +269,15 @@ $page_title = 'Complaints Dashboard';
                           <option value="resolved" <?php echo $complaint['status'] === 'resolved' ? 'selected' : ''; ?>>Mark Resolved</option>
                           <option value="closed" <?php echo $complaint['status'] === 'closed' ? 'selected' : ''; ?>>Close</option>
                         </select>
-                        <input type="text" name="internal_note" class="form-control form-control-sm" placeholder="Internal note (required when forwarding)" value="<?php echo htmlspecialchars($complaint['resolution'] ?? ''); ?>">
-                        <input type="text" name="student_reply" class="form-control form-control-sm" placeholder="Reply to student (sent as notification)">
+                        <div>
+                          <div class="complaints-action-title">Internal note</div>
+                          <textarea name="internal_note" class="form-control form-control-sm" rows="2" placeholder="Internal note for staff and manager review (required when forwarding)"><?php echo htmlspecialchars($complaint['resolution'] ?? ''); ?></textarea>
+                        </div>
+                        <div>
+                          <div class="complaints-action-title">Student reply</div>
+                          <textarea name="student_reply" class="form-control form-control-sm" rows="2" placeholder="Message that will be sent to the student as a notification"></textarea>
+                        </div>
+                        <div class="complaints-action-note">Use internal note for private review details. Use student reply for the message the student will see.</div>
                         <button type="submit" class="btn btn-primary btn-sm">Save</button>
                       </form>
                     </td>
