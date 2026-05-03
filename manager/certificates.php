@@ -3,6 +3,7 @@ session_start();
 require_once '../config/db.php';
 require_once __DIR__ . '/includes/graduation_helpers.php';
 require_once __DIR__ . '/../includes/notifications.php';
+require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
@@ -21,9 +22,13 @@ function log_audit_action($pdo, $user_id, $action_type, $entity_type, $entity_id
 }
 
 $initials = ds_display_initials($full_name, 'Manager');
+$csrf_error = $_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_validate_request();
+if($csrf_error){
+  $message = "<div class='toast show bg-danger'>Security validation failed. Please refresh and try again.</div>";
+}
 
 //issue certificate
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'issue'){
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action']) && $_POST['action'] == 'issue'){
     $sid = intval($_POST['student_id'] ?? 0);
     $eid = intval($_POST['enrollment_id'] ?? 0);
     
@@ -93,7 +98,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
 }
 
       // reject certificate
-      if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'reject'){
+      if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action']) && $_POST['action'] == 'reject'){
         $sid = intval($_POST['student_id'] ?? 0);
         $eid = intval($_POST['enrollment_id'] ?? 0);
 
@@ -151,7 +156,9 @@ try {
     }
     $eligible[] = $row;
   }
-} catch(PDOException $e) {}
+} catch(PDOException $e) {
+  error_log('Certificates eligible query error: ' . $e->getMessage());
+}
 
 $issued = [];
 try {
@@ -166,7 +173,9 @@ try {
     ");
     $stmt_i->execute([$branch_id]);
     $issued = $stmt_i->fetchAll();
-} catch(PDOException $e) {}
+} catch(PDOException $e) {
+  error_log('Certificates archive query error: ' . $e->getMessage());
+}
 
 ?>
 <!doctype html>
@@ -212,6 +221,7 @@ try {
                     <td><span class="badge badge-success">READY FOR GRADUATION</span></td>
                     <td>
                       <form method="POST" style="margin:0; display:flex; gap:8px; flex-wrap:wrap;">
+                        <?php csrf_input(); ?>
                         <input type="hidden" name="student_id" value="<?php echo $s['user_id']; ?>">
                         <input type="hidden" name="enrollment_id" value="<?php echo $s['enrollment_id']; ?>">
                         <button type="submit" name="action" value="issue" class="btn btn-primary btn-sm">Issue Certificate</button>

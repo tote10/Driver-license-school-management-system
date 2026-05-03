@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/../includes/security.php';
 // 1. SECURITY: Admin Only
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin'){
     header("Location: ../login.php");
@@ -8,8 +9,12 @@ if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin'){
 }
 $message = "";
 $edit_branch = null;
+$csrf_error = $_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_validate_request();
+if($csrf_error){
+    $message = "<div class='alert alert-danger'>Security validation failed. Please refresh and try again.</div>";
+}
 // 2. ROUTING: Handling POST Actions
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){  
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action'])){  
     // A. CREATE OR UPDATE BRANCH
     if($_POST['action'] == 'save'){
         $id = intval($_POST['branch_id'] ?? 0);
@@ -34,7 +39,8 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
                     $message = "<div class='alert alert-success'>New branch created!</div>";
                 }
             } catch(PDOException $e) {
-                $message = "<div class='alert alert-danger'>Error saving branch: " . $e->getMessage() . "</div>";
+                error_log('Admin branches save failed: ' . $e->getMessage());
+                $message = "<div class='alert alert-danger'>Error saving branch. Please try again.</div>";
             }
         }
     }
@@ -53,7 +59,8 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
                 $message = "<div class='alert alert-success'>Branch deleted successfully.</div>";
             }
         } catch(PDOException $e) {
-            $message = "<div class='alert alert-danger'>Delete failed: " . $e->getMessage() . "</div>";
+            error_log('Admin branches delete failed: ' . $e->getMessage());
+            $message = "<div class='alert alert-danger'>Delete failed. Please try again.</div>";
         }
     }
 }
@@ -65,7 +72,7 @@ if(isset($_GET['edit'])){
     $edit_branch = $stmt_e->fetch();
 }
 // Get all branches
-$branches = $pdo->query("SELECT * FROM branches ORDER BY name ASC")->fetchAll();
+$branches = $pdo->query("SELECT b.*, (SELECT COUNT(*) FROM users u WHERE u.branch_id = b.branch_id) AS user_count FROM branches b ORDER BY b.name ASC")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -104,6 +111,7 @@ $branches = $pdo->query("SELECT * FROM branches ORDER BY name ASC")->fetchAll();
         <div class="form-section">
             <h3><?php echo $edit_branch ? 'Edit Branch' : 'Create New Branch'; ?></h3>
             <form method="POST">
+                <?php csrf_input(); ?>
                 <input type="hidden" name="action" value="save">
                 <input type="hidden" name="branch_id" value="<?php echo $edit_branch['branch_id'] ?? 0; ?>">
                 
@@ -131,22 +139,28 @@ $branches = $pdo->query("SELECT * FROM branches ORDER BY name ASC")->fetchAll();
         <!-- Branch List -->
         <div class="list-section">
             <h3>Existing School Locations</h3>
+            <div style="margin-bottom:12px;">
+                <input type="text" id="branch-filter" placeholder="Filter by branch name or location" style="width:100%; max-width:360px; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
             <table>
                 <thead>
                     <tr>
                         <th>Name</th>
                         <th>Location</th>
+                        <th>Users</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach($branches as $b): ?>
-                    <tr>
+                    <tr data-branch-row data-search="<?php echo htmlspecialchars(strtolower((string)$b['name'] . ' ' . (string)$b['location'])); ?>">
                         <td><b><?php echo htmlspecialchars($b['name']); ?></b></td>
                         <td><?php echo htmlspecialchars($b['location'] ?? 'N/A'); ?></td>
+                        <td><b><?php echo intval($b['user_count']); ?></b></td>
                         <td>
                             <a href="branches.php?edit=<?php echo $b['branch_id']; ?>" style="color: #007bff; text-decoration: none;">Edit</a> | 
                             <form method="POST" style="display:inline;" onsubmit="return confirm('WARNING: Delete this branch?');">
+                                <?php csrf_input(); ?>
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="branch_id" value="<?php echo $b['branch_id']; ?>">
                                 <button type="submit" class="btn-delete" style="background:none; border:none; cursor:pointer;">Delete</button>
@@ -158,5 +172,20 @@ $branches = $pdo->query("SELECT * FROM branches ORDER BY name ASC")->fetchAll();
             </table>
         </div>
     </div>
+        <script>
+            (function () {
+                const input = document.getElementById('branch-filter');
+                const rows = document.querySelectorAll('[data-branch-row]');
+                if (!input || !rows.length) return;
+
+                input.addEventListener('input', function () {
+                    const term = (input.value || '').trim().toLowerCase();
+                    rows.forEach(function (row) {
+                        const text = row.getAttribute('data-search') || '';
+                        row.style.display = term === '' || text.indexOf(term) !== -1 ? '' : 'none';
+                    });
+                });
+            })();
+        </script>
 </body>
 </html>

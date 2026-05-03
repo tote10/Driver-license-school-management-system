@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/db.php';
 require_once __DIR__ . '/../includes/notifications.php';
+require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
@@ -26,9 +27,58 @@ function license_category_matches($student_category, $program_category) {
 }
 
 $initials = ds_display_initials($full_name, 'Manager');
+$csrf_error = $_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_validate_request();
+if($csrf_error){
+  $message = "<div class='toast show bg-danger'>Security validation failed. Please refresh and try again.</div>";
+}
+
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action']) && $_POST['action'] == 'reject'){
+    $type = $_POST['type'] ?? '';
+    $id = intval($_POST['id'] ?? 0);
+    try {
+        if ($type === 'account') {
+            $stmtUser = $pdo->prepare("SELECT user_id, full_name FROM users WHERE user_id = ? AND branch_id = ? AND role = 'student' LIMIT 1");
+            $stmtUser->execute([$id, $branch_id]);
+            $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
+            if(!$user){
+              throw new Exception('Security: this student account does not belong to your branch.');
+            }
+
+            $stmt = $pdo->prepare("UPDATE users SET status = 'rejected' WHERE user_id = ?");
+            $stmt->execute([$id]);
+            $stmt2 = $pdo->prepare("UPDATE students SET registration_status = 'rejected' WHERE user_id = ?");
+            $stmt2->execute([$id]);
+            log_audit_action($pdo, $_SESSION['user_id'], 'account_rejected', 'user', $id, 'Rejected student account ' . $id);
+            send_notification($pdo, $id, 'account_rejected', 'Account rejected', 'Your student account registration was rejected. Please contact the branch for more details.');
+            $message = "<div class='toast show bg-danger'>Student account rejected.</div>";
+        } elseif ($type === 'enrollment') {
+            $stmtCheck = $pdo->prepare("
+              SELECT e.enrollment_id, e.student_user_id, u.branch_id, tp.name AS program_name
+              FROM enrollments e
+              JOIN users u ON e.student_user_id = u.user_id
+              JOIN training_programs tp ON e.program_id = tp.program_id
+              WHERE e.enrollment_id = ?
+            ");
+            $stmtCheck->execute([$id]);
+            $enrollment = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+
+            if(!$enrollment || intval($enrollment['branch_id']) !== intval($branch_id)){
+              throw new Exception('Security: this enrollment does not belong to your branch.');
+            }
+
+            $stmt = $pdo->prepare("UPDATE enrollments SET approval_status = 'rejected' WHERE enrollment_id = ?");
+            $stmt->execute([$id]);
+            log_audit_action($pdo, $_SESSION['user_id'], 'enrollment_rejected', 'enrollment', $id, 'Rejected enrollment ' . $id);
+            send_notification($pdo, intval($enrollment['student_user_id']), 'enrollment_rejected', 'Enrollment rejected', 'Your enrollment for ' . ($enrollment['program_name'] ?? 'your selected program') . ' was rejected.');
+            $message = "<div class='toast show bg-danger'>Program enrollment rejected.</div>";
+        }
+    } catch(Exception $e) {
+        $message = "<div class='toast show bg-danger'>Error: ".$e->getMessage()."</div>";
+    }
+}
 
 // Action: Approve
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'approve'){
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action']) && $_POST['action'] == 'approve'){
     $type = $_POST['type'] ?? '';
     $id = intval($_POST['id'] ?? 0);
     try {
@@ -77,7 +127,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
 }
 
 // Action: Enroll Student Manually
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'enroll'){
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action']) && $_POST['action'] == 'enroll'){
     $student_id = intval($_POST['student_id'] ?? 0);
     $program_id = intval($_POST['program_id'] ?? 0);
     try {
@@ -184,7 +234,9 @@ try {
     $stmt_act->execute([$branch_id]);
     $active_enrollments = $stmt_act->fetchAll();
 
-} catch(PDOException $e) {}
+} catch(PDOException $e) {
+  error_log('Enrollments page query error: ' . $e->getMessage());
+}
 
 ?>
 <!doctype html>
@@ -215,7 +267,8 @@ try {
             <form method="GET" class="mt-2 mb-3">
               <div class="form-group">
                 <label class="form-label">Load programs for student</label>
-                <select name="student_id" class="form-control" onchange="this.form.submit()">
+                <input type="text" class="form-control mb-2" placeholder="Filter students by name or email" data-student-filter="load-student-select" autocomplete="off">
+                <select id="load-student-select" name="student_id" class="form-control" onchange="this.form.submit()">
                   <option value="">-- Select Student --</option>
                   <?php foreach($active_students as $st): ?>
                     <option value="<?php echo $st['user_id']; ?>" <?php echo $selected_student_id == $st['user_id'] ? 'selected' : ''; ?>>
@@ -227,10 +280,12 @@ try {
             </form>
             <form method="POST" class="mt-3">
               <input type="hidden" name="action" value="enroll">
+              <?php csrf_input(); ?>
               <div class="grid grid-cols-2 gap-md">
                 <div class="form-group">
                   <label class="form-label">Select Active Student</label>
-                  <select name="student_id" class="form-control" required>
+                  <input type="text" class="form-control mb-2" placeholder="Filter students by name or email" data-student-filter="manual-student-select" autocomplete="off">
+                  <select id="manual-student-select" name="student_id" class="form-control" required>
                     <option value="">-- Choose Student --</option>
                     <?php foreach($active_students as $st): ?>
                       <option value="<?php echo $st['user_id']; ?>" <?php echo $selected_student_id == $st['user_id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($st['full_name']); ?> (<?php echo htmlspecialchars($st['email']); ?>)</option>
@@ -285,12 +340,15 @@ try {
                     </td>
                     <td><?php echo date('Y-m-d', strtotime($p['date_applied'])); ?></td>
                     <td>
-                      <form method="POST" style="margin:0;">
-                        <input type="hidden" name="action" value="approve">
+                      <form method="POST" style="margin:0; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                        <?php csrf_input(); ?>
                         <input type="hidden" name="type" value="<?php echo $p['type']; ?>">
                         <input type="hidden" name="id" value="<?php echo $p['id']; ?>">
-                        <button type="submit" class="btn btn-primary btn-sm">
+                        <button type="submit" name="action" value="approve" class="btn btn-primary btn-sm">
                             <?php echo $p['type'] === 'account' ? 'Activate Account' : 'Approve Enrollment'; ?>
+                        </button>
+                        <button type="submit" name="action" value="reject" class="btn btn-outline btn-sm" style="border-color: var(--danger); color: var(--danger);">
+                            <?php echo $p['type'] === 'account' ? 'Reject Account' : 'Reject Enrollment'; ?>
                         </button>
                       </form>
                     </td>
@@ -343,5 +401,68 @@ try {
         </main>
       </div>
     </div>
+    <script>
+      (function () {
+        var filterInputs = document.querySelectorAll('[data-student-filter]');
+
+        function setupFilter(inputEl) {
+          var selectId = inputEl.getAttribute('data-student-filter');
+          var selectEl = document.getElementById(selectId);
+          if (!selectEl) {
+            return;
+          }
+
+          var optionSnapshot = Array.from(selectEl.options).map(function (opt) {
+            return {
+              value: opt.value,
+              text: opt.text,
+              selected: opt.selected
+            };
+          });
+
+          function renderFilteredOptions(term) {
+            var normalized = String(term || '').trim().toLowerCase();
+            var currentValue = selectEl.value;
+            var matchedCount = 0;
+
+            selectEl.innerHTML = '';
+
+            optionSnapshot.forEach(function (opt) {
+              var isPlaceholder = opt.value === '';
+              var isSelected = currentValue !== '' && opt.value === currentValue;
+              var matches = isPlaceholder || normalized === '' || opt.text.toLowerCase().indexOf(normalized) !== -1 || isSelected;
+              if (!matches) {
+                return;
+              }
+
+              var newOpt = document.createElement('option');
+              newOpt.value = opt.value;
+              newOpt.text = opt.text;
+              if (isSelected || (!currentValue && opt.selected)) {
+                newOpt.selected = true;
+              }
+              selectEl.appendChild(newOpt);
+
+              if (!isPlaceholder) {
+                matchedCount++;
+              }
+            });
+
+            if (matchedCount === 0) {
+              var noResultOption = document.createElement('option');
+              noResultOption.value = '';
+              noResultOption.text = '-- No matching students --';
+              selectEl.appendChild(noResultOption);
+            }
+          }
+
+          inputEl.addEventListener('input', function () {
+            renderFilteredOptions(inputEl.value);
+          });
+        }
+
+        filterInputs.forEach(setupFilter);
+      })();
+    </script>
   </body>
 </html>

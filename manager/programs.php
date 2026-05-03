@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
@@ -13,9 +14,13 @@ $full_name = ds_display_name('Manager');
 $message   = "";
 
 $initials = ds_display_initials($full_name, 'Manager');
+$csrf_error = $_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_validate_request();
+if($csrf_error){
+  $message = "<div class='toast show bg-danger'>Security validation failed. Please refresh and try again.</div>";
+}
 
 // create program
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'create'){
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action']) && $_POST['action'] == 'create'){
     $name = trim($_POST['name'] ?? '');
     $license_category = trim($_POST['license_category'] ?? '');
     $theory_hours = intval($_POST['theory_duration_hours'] ?? 0);
@@ -36,7 +41,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
     }
 }
 // update program
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'update_program'){
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action']) && $_POST['action'] == 'update_program'){
     $pid = intval($_POST['program_id'] ?? 0);
     $name = trim($_POST['name'] ?? '');
     $license_category = trim($_POST['license_category'] ?? '');
@@ -57,7 +62,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['ac
     }
 }
 // delete program
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'delete_program'){
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action']) && $_POST['action'] == 'delete_program'){
     $pid = intval($_POST['program_id'] ?? 0);
     if($pid > 0){
         try {
@@ -81,7 +86,9 @@ try {
     $stmt = $pdo->prepare("SELECT * FROM training_programs WHERE branch_id = ? ORDER BY name ASC");
     $stmt->execute([$branch_id]);
     $programs = $stmt->fetchAll();
-} catch(PDOException $e) {}
+} catch(PDOException $e) {
+  error_log('Programs list query error: ' . $e->getMessage());
+}
 
 ?>
 <!doctype html>
@@ -111,6 +118,7 @@ try {
               <h3 class="card-subtitle">Add New Training Program</h3>
               <form method="POST" class="mt-3">
                   <input type="hidden" name="action" value="create">
+                  <?php csrf_input(); ?>
                   <div class="grid grid-cols-4 gap-md">
                       <div class="form-group">
                           <label class="form-label">Program Name</label>
@@ -149,11 +157,19 @@ try {
                   <button type="submit" class="btn btn-primary mt-2">Create Program</button>
               </form>
           </div>
+        <div class="card p-3 mb-1">
+          <h3 class="card-subtitle">Find Training Program</h3>
+          <div class="form-group mb-0 mt-2">
+            <label class="form-label">Filter by name, category, or description</label>
+            <input type="text" id="program-filter-input" class="form-control" placeholder="Type to filter programs" autocomplete="off">
+          </div>
+        </div>
         <!-- Edit Program Card (hidden) -->
 <div class="card p-3 mb-1" id="editProgramCard" style="display:none;">
   <h3 class="card-subtitle">Edit Training Program</h3>
   <form method="POST" id="editProgramForm" class="mt-3">
     <input type="hidden" name="action" value="update_program">
+    <?php csrf_input(); ?>
     <input type="hidden" name="program_id" id="edit_program_id">
 
     <div class="grid grid-cols-4 gap-md">
@@ -200,8 +216,9 @@ try {
 </div>
           <div class="grid grid-cols-3">
             <?php foreach($programs as $p): ?>
-            <div class="card">
+            <div class="card" data-program-card data-search-text="<?php echo htmlspecialchars(strtolower((string)$p['name'] . ' ' . (string)$p['license_category'] . ' ' . (string)$p['description'])); ?>">
               <h3 class="card-subtitle"><?php echo htmlspecialchars($p['name']); ?></h3>
+              <div class="text-sm text-muted mb-2"><?php echo htmlspecialchars($p['license_category']); ?></div>
               <div class="stat-value" style="font-size: 1.5rem; margin: 10px 0;">$<?php echo number_format($p['fee_amount'], 2); ?></div>
               <p class="text-sm text-muted mb-4"><?php echo htmlspecialchars($p['description']); ?></p>
               <div class="d-flex justify-between align-center">
@@ -209,6 +226,7 @@ try {
                   <div>
                     <button type="button" class="btn btn-outline btn-sm edit-program-btn" data-program="<?php echo htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8'); ?>">Edit</button>
                     <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this program? This cannot be undone.');">
+                      <?php csrf_input(); ?>
                       <input type="hidden" name="action" value="delete_program">
                       <input type="hidden" name="program_id" value="<?php echo $p['program_id']; ?>">
                       <button type="submit" class="btn btn-outline btn-sm">Delete</button>
@@ -224,6 +242,22 @@ try {
 
 
     <script>
+  (function () {
+    const filterInput = document.getElementById('program-filter-input');
+    const cards = document.querySelectorAll('[data-program-card]');
+
+    if (!filterInput || !cards.length) return;
+
+    filterInput.addEventListener('input', () => {
+      const term = (filterInput.value || '').trim().toLowerCase();
+
+      cards.forEach(card => {
+        const text = card.getAttribute('data-search-text') || '';
+        card.style.display = term === '' || text.indexOf(term) !== -1 ? '' : 'none';
+      });
+    });
+  })();
+
   document.querySelectorAll('.edit-program-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const p = JSON.parse(btn.dataset.program);

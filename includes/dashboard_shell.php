@@ -35,7 +35,6 @@ if (!function_exists('ds_dashboard_role_config')) {
                     ['dashboard.php', 'Supervisor Dashboard'],
                     ['assignments.php', 'Instructor Assignments'],
                     ['reviews.php', 'Training Reviews'],
-                    ['progress.php', 'Student Progress'],
                     ['schedules.php', 'Schedules'],
                     ['notifications.php', 'Notifications Board'],
                     ['complaints.php', 'Complaints'],

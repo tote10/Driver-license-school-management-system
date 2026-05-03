@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/db.php';
 require_once __DIR__ . '/../includes/notifications.php';
+require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'supervisor'){
@@ -13,6 +14,11 @@ $branch_id = intval($_SESSION['branch_id'] ?? 0);
 $supervisor_id = intval($_SESSION['user_id'] ?? 0);
 $full_name = ds_display_name('Supervisor');
 $initials = ds_display_initials($full_name, 'Supervisor');
+$message = '';
+$csrf_error = $_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_validate_request();
+if($csrf_error){
+  $message = "<div class='toast show bg-danger'>Security validation failed. Please refresh and try again.</div>";
+}
 
 $complaints = [];
 $status_filter = strtolower(trim((string)($_GET['status'] ?? 'all')));
@@ -41,11 +47,7 @@ function complaint_status_class($status) {
   };
 }
 
-function complaint_status_is_archive($status) {
-  return in_array(strtolower(trim((string)$status)), ['resolved', 'closed'], true);
-}
-
-if($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_complaint') {
+if($_SERVER['REQUEST_METHOD'] === 'POST' && !$csrf_error && ($_POST['action'] ?? '') === 'update_complaint') {
   $complaint_id = intval($_POST['complaint_id'] ?? 0);
   $new_status = strtolower(trim((string)($_POST['new_status'] ?? '')));
   $internal_note = trim((string)($_POST['internal_note'] ?? ''));
@@ -156,7 +158,9 @@ try {
   $stmt = $pdo->prepare($sql);
   $stmt->execute($params);
     $complaints = $stmt->fetchAll();
-} catch(PDOException $e) {}
+} catch(PDOException $e) {
+  error_log('Supervisor complaints query error: ' . $e->getMessage());
+}
 
 $page_title = 'Complaints Dashboard';
 ?>
@@ -207,6 +211,9 @@ $page_title = 'Complaints Dashboard';
       <div class="main-content">
         <?php include 'includes/topbar.php'; ?>
         <main class="page-content">
+          <div class="toast-container">
+            <?php if($message) echo $message; ?>
+          </div>
           <div class="card mb-4">
             <h3 class="card-subtitle mb-2">Complaints Dashboard</h3>
             <p class="text-sm text-muted mb-3">Review branch complaints, track resolution status, and forward serious cases when needed.</p>
@@ -215,7 +222,7 @@ $page_title = 'Complaints Dashboard';
               <div class="d-flex gap-md flex-wrap">
                 <a href="dashboard.php" class="btn btn-outline">Supervisor Dashboard</a>
                 <a href="assignments.php" class="btn btn-outline">Instructor Assignments</a>
-                <a href="progress.php" class="btn btn-outline">Student Progress</a>
+                <a href="reviews.php" class="btn btn-outline">Training Review</a>
               </div>
               <div>
                 <a href="schedules.php" class="btn btn-outline">Schedules</a>
@@ -260,6 +267,7 @@ $page_title = 'Complaints Dashboard';
                     <td>
                       <form method="post" class="d-flex flex-col gap-sm complaints-action-form" style="margin: 0;">
                         <input type="hidden" name="action" value="update_complaint">
+                        <?php csrf_input(); ?>
                         <input type="hidden" name="complaint_id" value="<?php echo intval($complaint['complaint_id']); ?>">
                         <div class="complaints-action-title">Update status</div>
                         <select name="new_status" class="form-control form-control-sm" required>

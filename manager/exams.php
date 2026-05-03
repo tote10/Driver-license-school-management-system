@@ -3,6 +3,7 @@ session_start();
 require_once '../config/db.php';
 require_once __DIR__ . '/includes/graduation_helpers.php';
 require_once __DIR__ . '/../includes/notifications.php';
+require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/profile_helpers.php';
 
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'manager'){
@@ -22,9 +23,13 @@ function log_audit_action($pdo, $user_id, $action_type, $entity_type, $entity_id
 }
 
 $initials = ds_display_initials($full_name, 'Manager');
+$csrf_error = $_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_validate_request();
+if($csrf_error){
+  $message = "<div class='toast show bg-danger'>Security validation failed. Please refresh and try again.</div>";
+}
 
 // --- ACTIONS: SCHEDULE, RECORD, APPROVE ---
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action'])){
     
     if($_POST['action'] == 'schedule'){
         $sid = intval($_POST['student_id'] ?? 0);
@@ -246,7 +251,8 @@ $pending = $pending->fetchAll();
               <form method="GET" class="mb-3">
                 <div class="form-group mb-0">
                   <label class="form-label">Choose Student</label>
-                  <select name="student_id" class="form-control" onchange="this.form.submit()" style="min-width: 240px;">
+                  <input type="text" class="form-control mb-2" placeholder="Filter students by name" data-select-filter="exam-student-select" autocomplete="off">
+                  <select id="exam-student-select" name="student_id" class="form-control" onchange="this.form.submit()" style="min-width: 240px;">
                     <option value="">-- Select Student --</option>
                     <?php foreach($students as $s): ?>
                     <option value="<?php echo $s['user_id']; ?>" <?php echo $selected_student_id == $s['user_id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($s['full_name']); ?></option>
@@ -260,10 +266,12 @@ $pending = $pending->fetchAll();
               <?php endif; ?>
               <form method="POST" class="mt-3 d-flex gap-md flex-wrap align-end">
                   <input type="hidden" name="action" value="schedule">
+                <?php csrf_input(); ?>
                 <input type="hidden" name="student_id" value="<?php echo $selected_student_id; ?>">
                   <div class="form-group mb-0">
                   <label class="form-label">Enrolled Program</label>
-                  <select name="program_id" class="form-control" style="min-width: 240px;" required <?php echo $selected_student_id > 0 ? '' : 'disabled'; ?>>
+                  <input type="text" class="form-control mb-2" placeholder="Filter programs by name or category" data-select-filter="exam-program-select" autocomplete="off" <?php echo $selected_student_id > 0 ? '' : 'disabled'; ?>>
+                  <select id="exam-program-select" name="program_id" class="form-control" style="min-width: 240px;" required <?php echo $selected_student_id > 0 ? '' : 'disabled'; ?>>
                     <option value="">-- Choose Program --</option>
                     <?php if($selected_student_id > 0): ?>
                       <?php foreach($student_programs as $program): ?>
@@ -311,6 +319,7 @@ $pending = $pending->fetchAll();
                       </td>
                       <td>
                           <form method="POST" class="d-flex gap-sm align-center" style="margin:0;">
+                              <?php csrf_input(); ?>
                               <input type="number" name="score_<?php echo $ex['exam_id']; ?>" placeholder="Score" class="form-control" style="width:70px; padding:0.3rem;" required>
                               <label class="text-sm d-flex align-center gap-sm">
                                   <input type="checkbox" name="passed_<?php echo $ex['exam_id']; ?>"> Pass
@@ -351,6 +360,7 @@ $pending = $pending->fetchAll();
                       </td>
                       <td>
                           <form method="POST" style="margin:0;">
+                              <?php csrf_input(); ?>
                               <button type="submit" name="action" value="approve_<?php echo $p['exam_id']; ?>" class="btn btn-primary btn-sm">Approve Result</button>
                           </form>
                       </td>
@@ -367,5 +377,56 @@ $pending = $pending->fetchAll();
         </main>
       </div>
     </div>
+    <script>
+      (function () {
+        var filterInputs = document.querySelectorAll('[data-select-filter]');
+
+        function setupSelectFilter(inputEl) {
+          var selectId = inputEl.getAttribute('data-select-filter');
+          var selectEl = document.getElementById(selectId);
+          if (!selectEl) return;
+
+          var optionSnapshot = Array.from(selectEl.options).map(function (opt) {
+            return { value: opt.value, text: opt.text, selected: opt.selected };
+          });
+
+          function render(term) {
+            var normalized = String(term || '').trim().toLowerCase();
+            var currentValue = selectEl.value;
+            var matchedCount = 0;
+
+            selectEl.innerHTML = '';
+            optionSnapshot.forEach(function (opt) {
+              var isPlaceholder = opt.value === '';
+              var isSelected = currentValue !== '' && opt.value === currentValue;
+              var matches = isPlaceholder || normalized === '' || opt.text.toLowerCase().indexOf(normalized) !== -1 || isSelected;
+              if (!matches) return;
+
+              var newOpt = document.createElement('option');
+              newOpt.value = opt.value;
+              newOpt.text = opt.text;
+              if (isSelected || (!currentValue && opt.selected)) {
+                newOpt.selected = true;
+              }
+              selectEl.appendChild(newOpt);
+              if (!isPlaceholder) matchedCount++;
+            });
+
+            if (matchedCount === 0) {
+              var noResult = document.createElement('option');
+              noResult.value = '';
+              noResult.text = '-- No matching options --';
+              selectEl.appendChild(noResult);
+            }
+          }
+
+          inputEl.addEventListener('input', function () {
+            render(inputEl.value);
+          });
+        }
+
+        filterInputs.forEach(setupSelectFilter);
+      })();
+    </script>
   </body>
 </html>

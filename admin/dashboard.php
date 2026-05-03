@@ -36,7 +36,8 @@ try {
     $branches = $stmt_br->fetchAll();
 
 } catch (PDOException $e) {
-    $message = "System Error: " . $e->getMessage();
+    error_log('Admin dashboard query failed: ' . $e->getMessage());
+    $message = "System error. Please refresh or contact support.";
 }
 
 ?>
@@ -44,7 +45,9 @@ try {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Super Admin Command Center</title>
+    <link rel="stylesheet" href="../assets/css/style.css?v=<?php echo time(); ?>" />
     <style>
         body { font-family: sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
         nav { background: #333; color: white; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
@@ -72,6 +75,11 @@ try {
 
     <h2>System-Wide Performance Overview</h2>
     <?php if($message) echo "<p style='color:red;'>$message</p>"; ?>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
+        <a href="branches.php" class="btn btn-outline">Manage Branches</a>
+        <a href="users.php" class="btn btn-outline">Manage Users</a>
+    </div>
 
     <div class="stats-grid">
         <div class="stat-card">

@@ -54,10 +54,25 @@ try {
               <div class="d-flex gap-md flex-wrap">
                 <a href="dashboard.php" class="btn btn-outline">Supervisor Dashboard</a>
                 <a href="assignments.php" class="btn btn-outline">Instructor Assignments</a>
-                <a href="progress.php" class="btn btn-outline">Student Progress</a>
+                <a href="reviews.php" class="btn btn-outline">Training Review</a>
               </div>
               <div>
                 <a href="complaints.php" class="btn btn-outline">Complaints</a>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-md mb-3">
+              <div class="form-group mb-0">
+                <label class="form-label">Filter by student</label>
+                <input type="text" id="schedule-filter-student" class="form-control" placeholder="Type student name" autocomplete="off">
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Filter by instructor</label>
+                <input type="text" id="schedule-filter-instructor" class="form-control" placeholder="Type instructor name" autocomplete="off">
+              </div>
+              <div class="form-group mb-0">
+                <label class="form-label">Filter by lesson</label>
+                <input type="text" id="schedule-filter-lesson" class="form-control" placeholder="Type lesson type" autocomplete="off">
               </div>
             </div>
 
@@ -75,7 +90,7 @@ try {
                 </thead>
                 <tbody>
                   <?php foreach($schedules as $schedule): ?>
-                  <tr>
+                  <tr data-student="<?php echo htmlspecialchars(strtolower((string)$schedule['student_name'])); ?>" data-instructor="<?php echo htmlspecialchars(strtolower((string)$schedule['instructor_name'])); ?>" data-lesson="<?php echo htmlspecialchars(strtolower((string)$schedule['lesson_type'])); ?>">
                     <td class="font-bold"><?php echo htmlspecialchars($schedule['student_name']); ?></td>
                     <td><?php echo htmlspecialchars($schedule['instructor_name']); ?></td>
                     <td><?php echo htmlspecialchars($schedule['lesson_type']); ?></td>
@@ -94,5 +109,35 @@ try {
         </main>
       </div>
     </div>
+    <script>
+      (function () {
+        var studentFilter = document.getElementById('schedule-filter-student');
+        var instructorFilter = document.getElementById('schedule-filter-instructor');
+        var lessonFilter = document.getElementById('schedule-filter-lesson');
+        var rows = document.querySelectorAll('tbody tr[data-student]');
+
+        function applyFilters() {
+          var studentTerm = (studentFilter?.value || '').trim().toLowerCase();
+          var instructorTerm = (instructorFilter?.value || '').trim().toLowerCase();
+          var lessonTerm = (lessonFilter?.value || '').trim().toLowerCase();
+
+          rows.forEach(function (row) {
+            var student = row.getAttribute('data-student') || '';
+            var instructor = row.getAttribute('data-instructor') || '';
+            var lesson = row.getAttribute('data-lesson') || '';
+
+            var matchStudent = studentTerm === '' || student.indexOf(studentTerm) !== -1;
+            var matchInstructor = instructorTerm === '' || instructor.indexOf(instructorTerm) !== -1;
+            var matchLesson = lessonTerm === '' || lesson.indexOf(lessonTerm) !== -1;
+
+            row.style.display = matchStudent && matchInstructor && matchLesson ? '' : 'none';
+          });
+        }
+
+        [studentFilter, instructorFilter, lessonFilter].forEach(function (input) {
+          if (input) input.addEventListener('input', applyFilters);
+        });
+      })();
+    </script>
   </body>
 </html>

@@ -246,7 +246,7 @@ $page_title = 'Instructor Assignments';
             <div class="d-flex gap-md flex-wrap">
               <a href="dashboard.php" class="btn btn-outline">Supervisor Dashboard</a>
               <a href="reviews.php" class="btn btn-outline">Training Reviews</a>
-              <a href="progress.php" class="btn btn-outline">Student Progress</a>
+              <a href="reviews.php" class="btn btn-outline">Training Review</a>
             </div>
             <div>
               <a href="complaints.php" class="btn btn-outline">Complaints</a>

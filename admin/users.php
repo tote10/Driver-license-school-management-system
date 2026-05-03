@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/db.php';
+require_once __DIR__ . '/../includes/security.php';
 
 // 1. SECURITY: Admin Only
 if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin'){
@@ -9,9 +10,13 @@ if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin'){
 }
 
 $message = "";
+$csrf_error = $_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_validate_request();
+if($csrf_error){
+    $message = "<div class='alert alert-danger'>Security validation failed. Please refresh and try again.</div>";
+}
 
 // 2. ROUTING: Handling Actions
-if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
+if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action'])){
     
     // A. UPDATE USER (Role or Branch)
     if($_POST['action'] == 'update_user'){
@@ -26,7 +31,8 @@ if($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])){
                 $stmt->execute([$new_role, ($new_branch > 0 ? $new_branch : null), $new_status, $uid]);
                 $message = "<div class='alert alert-success'>User updated successfully!</div>";
             } catch(PDOException $e) {
-                $message = "<div class='alert alert-danger'>Update failed: " . $e->getMessage() . "</div>";
+                error_log('Admin users update failed: ' . $e->getMessage());
+                $message = "<div class='alert alert-danger'>Update failed. Please try again.</div>";
             }
         }
     }
@@ -65,6 +71,7 @@ $users = $stmt_u->fetchAll();
         .badge { padding: 3px 6px; border-radius: 3px; font-size: 0.75rem; color: white; text-transform: uppercase; }
         .admin { background: #dc3545; }
         .manager { background: #fd7e14; }
+        .supervisor { background: #6f42c1; }
         .instructor { background: #007bff; }
         .student { background: #28a745; }
     </style>
@@ -83,6 +90,9 @@ $users = $stmt_u->fetchAll();
     <?php echo $message; ?>
 
     <p>Manage all accounts system-wide. You can re-assign managers to different branches or promote staff members.</p>
+    <div style="margin-bottom: 12px;">
+        <input type="text" id="admin-user-filter" placeholder="Filter by name, email, role, or branch" style="width:100%; max-width:480px; padding:8px; border:1px solid #ddd; border-radius:4px;">
+    </div>
 
     <table>
         <thead>
@@ -96,8 +106,9 @@ $users = $stmt_u->fetchAll();
         </thead>
         <tbody>
             <?php foreach($users as $user): ?>
-            <tr>
+            <tr data-user-row data-search="<?php echo htmlspecialchars(strtolower((string)$user['full_name'] . ' ' . (string)$user['email'] . ' ' . (string)$user['role'] . ' ' . (string)($user['branch_name'] ?? ''))); ?>">
                 <form method="POST">
+                    <?php csrf_input(); ?>
                     <input type="hidden" name="action" value="update_user">
                     <input type="hidden" name="user_id" value="<?php echo $user['user_id']; ?>">
                     
@@ -106,9 +117,11 @@ $users = $stmt_u->fetchAll();
                         <small><?php echo htmlspecialchars($user['email']); ?></small>
                     </td>
                     <td>
+                        <span class="badge <?php echo htmlspecialchars($user['role']); ?>" style="margin-right:8px;"><?php echo htmlspecialchars($user['role']); ?></span>
                         <select name="role">
                             <option value="student" <?php echo $user['role'] == 'student' ? 'selected' : ''; ?>>Student</option>
                             <option value="instructor" <?php echo $user['role'] == 'instructor' ? 'selected' : ''; ?>>Instructor</option>
+                            <option value="supervisor" <?php echo $user['role'] == 'supervisor' ? 'selected' : ''; ?>>Supervisor</option>
                             <option value="manager" <?php echo $user['role'] == 'manager' ? 'selected' : ''; ?>>Manager</option>
                             <option value="admin" <?php echo $user['role'] == 'admin' ? 'selected' : ''; ?>>Admin</option>
                         </select>
@@ -128,6 +141,7 @@ $users = $stmt_u->fetchAll();
                             <option value="active" <?php echo $user['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
                             <option value="pending" <?php echo $user['status'] == 'pending' ? 'selected' : ''; ?>>Pending</option>
                             <option value="suspended" <?php echo $user['status'] == 'suspended' ? 'selected' : ''; ?>>Suspended</option>
+                            <option value="rejected" <?php echo $user['status'] == 'rejected' ? 'selected' : ''; ?>>Rejected</option>
                         </select>
                     </td>
                     <td>
@@ -138,6 +152,22 @@ $users = $stmt_u->fetchAll();
             <?php endforeach; ?>
         </tbody>
     </table>
+
+        <script>
+            (function () {
+                const input = document.getElementById('admin-user-filter');
+                const rows = document.querySelectorAll('[data-user-row]');
+                if (!input || !rows.length) return;
+
+                input.addEventListener('input', function () {
+                    const term = (input.value || '').trim().toLowerCase();
+                    rows.forEach(function (row) {
+                        const text = row.getAttribute('data-search') || '';
+                        row.style.display = term === '' || text.indexOf(term) !== -1 ? '' : 'none';
+                    });
+                });
+            })();
+        </script>
 
 </body>
 </html>
