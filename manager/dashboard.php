@@ -25,17 +25,19 @@ $revenue_target_pct = 0;
 $initials = ds_display_initials($full_name, 'Manager');
 
 try {
-    // 1. Core Alerts (Action Items)
+    // pending students
     $stmt_p1 = $pdo->prepare("SELECT COUNT(*) FROM users WHERE branch_id = ? AND status = 'pending' AND role = 'student'");
     $stmt_p1->execute([$branch_id]);
     $pending_accounts = $stmt_p1->fetchColumn();
 
+    //total pending enrollements
     $stmt_p2 = $pdo->prepare("SELECT COUNT(*) FROM enrollments e JOIN users u ON e.student_user_id = u.user_id WHERE u.branch_id = ? AND e.approval_status = 'pending'");
     $stmt_p2->execute([$branch_id]);
     $pending_enrolls_only = $stmt_p2->fetchColumn();
     
     $pending_enrolls = $pending_accounts + $pending_enrolls_only;
 
+    //exam waitin for approvals
     $stmt_ex = $pdo->prepare("SELECT COUNT(*) FROM exam_records er JOIN users u ON er.student_user_id = u.user_id WHERE u.branch_id = ? AND er.status = 'pending_approval'");
     $stmt_ex->execute([$branch_id]);
     $pending_exams = $stmt_ex->fetchColumn();
@@ -69,13 +71,13 @@ try {
     $pass_rate = ($exam_stats['total'] > 0) ? round(($exam_stats['passes'] / $exam_stats['total']) * 100, 1) : 0;
 
     // Registration Target (Goal: 50 active students per branch)
-    $reg_target_pct = ($total_students > 0) ? min(100, round(($total_students / 50) * 100)) : 0;
+    $reg_target_pct = ($total_students > 0) ? min(100, round(($total_students / 500) * 100)) : 0;
 
     // Revenue Projections (Goal: $10,000 per branch)
     $stmt_rev = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments p JOIN users u ON p.student_user_id = u.user_id WHERE u.branch_id = ? AND p.status='paid'");
     $stmt_rev->execute([$branch_id]);
     $total_revenue = $stmt_rev->fetchColumn();
-    $revenue_target_pct = ($total_revenue > 0) ? min(100, round(($total_revenue / 10000) * 100)) : 0;
+    $revenue_target_pct = ($total_revenue > 0) ? min(100, round(($total_revenue / 100000) * 100)) : 0;
 
 } catch(PDOException $e) {}
 
@@ -217,7 +219,7 @@ try {
                 <h3 class="card-subtitle">Reports & Analytics Highlights</h3>
                 <div class="mt-4">
                   <div class="d-flex justify-between text-sm mb-1 font-bold">
-                    <span>Registration Target (50)</span>
+                    <span>Registration Target (500)</span>
                     <span class="text-primary"><?php echo $reg_target_pct; ?>%</span>
                   </div>
                   <div class="progress" style="height: 12px">
@@ -225,7 +227,7 @@ try {
                   </div>
 
                   <div class="d-flex justify-between text-sm mb-1 font-bold mt-3">
-                    <span>Revenue Projections ($10k)</span>
+                    <span>Revenue Projections (100k Birr)</span>
                     <span class="text-success"><?php echo $revenue_target_pct; ?>%</span>
                   </div>
                   <div class="progress" style="height: 12px">
