@@ -28,7 +28,7 @@ if($csrf_error){
   $message = "<div class='toast show bg-danger'>Security validation failed. Please refresh and try again.</div>";
 }
 
-// --- ACTIONS: SCHEDULE, RECORD, APPROVE ---
+// SCHEDULE, RECORD, APPROVE EXAMS
 if($_SERVER['REQUEST_METHOD'] == 'POST' && !$csrf_error && isset($_POST['action'])){
     
     if($_POST['action'] == 'schedule'){
